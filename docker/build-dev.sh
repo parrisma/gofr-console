@@ -11,11 +11,15 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 USER_UID=$(id -u)
 USER_GID=$(id -g)
 
+# Get docker socket GID for proper Docker access
+DOCKER_GID=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo "999")
+
 echo "======================================================================="
 echo "Building GOFR-Console Development Image"
 echo "======================================================================="
 echo "User UID: $USER_UID"
 echo "User GID: $USER_GID"
+echo "Docker GID: $DOCKER_GID"
 echo "======================================================================="
 
 echo ""
@@ -24,6 +28,7 @@ docker build \
     -f "$SCRIPT_DIR/Dockerfile.dev" \
     --build-arg UID=$USER_UID \
     --build-arg GID=$USER_GID \
+    --build-arg DOCKER_GID=$DOCKER_GID \
     -t gofr-console-dev:latest \
     "$PROJECT_ROOT"
 

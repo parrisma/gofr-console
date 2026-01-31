@@ -17,6 +17,8 @@
 - Minimize deps; prefer maintained packages.
 - Check for CVEs; flag high/critical issues.
 - Pin versions where feasible.
+- Run `pnpm run security` or `./scripts/security-scan.sh` before commits.
+- Tools: pnpm audit, ESLint security plugin, Semgrep (SAST), Trivy (image scan).
 
 ## Node Hardening
 - Avoid risky `postinstall` scripts.
