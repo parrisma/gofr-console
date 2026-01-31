@@ -77,13 +77,6 @@ if ! docker network inspect $DOCKER_NETWORK >/dev/null 2>&1; then
     docker network create $DOCKER_NETWORK
 fi
 
-# Create docker volume for node_modules (improves performance)
-VOLUME_NAME="gofr-console-node-modules"
-if ! docker volume inspect $VOLUME_NAME >/dev/null 2>&1; then
-    echo "Creating volume: $VOLUME_NAME"
-    docker volume create $VOLUME_NAME
-fi
-
 # Stop and remove existing container
 if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
     echo "Stopping existing container: $CONTAINER_NAME"
@@ -100,7 +93,6 @@ docker run -d \
     --network "$DOCKER_NETWORK" \
     -p ${DEV_PORT}:3000 \
     -v "$PROJECT_ROOT:/home/gofr/devroot/gofr-console:rw" \
-    -v ${VOLUME_NAME}:/home/gofr/devroot/gofr-console/node_modules:rw \
     -v /var/run/docker.sock:/var/run/docker.sock:rw \
     --group-add ${DOCKER_GID} \
     -e NODE_ENV=development \
