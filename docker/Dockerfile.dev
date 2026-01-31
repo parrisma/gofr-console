@@ -1,0 +1,43 @@
+# GOFR-Console Development Image
+# React + MUI frontend development environment
+FROM node:20-bookworm
+
+# Install dev tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gh \
+    git \
+    vim \
+    jq \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Create gofr user to match host
+# Remove existing node user (UID 1000) first, then create gofr user
+ARG UID=1000
+ARG GID=1000
+RUN userdel -r node 2>/dev/null || true && \
+    groupadd -g $GID gofr || true && \
+    useradd -m -u $UID -g $GID -s /bin/bash gofr
+
+# Add gofr user to docker group (group will be created/mapped at runtime)
+# The docker group GID will be set to match the host's docker socket GID
+RUN groupadd -g 999 docker || true \
+    && usermod -aG docker gofr
+
+# Create project directory
+RUN mkdir -p /home/gofr/devroot/gofr-console \
+    && chown -R gofr:gofr /home/gofr/devroot
+
+# SSH config for git operations
+RUN mkdir -p /home/gofr/.ssh && chmod 700 /home/gofr/.ssh && chown gofr:gofr /home/gofr/.ssh
+
+WORKDIR /home/gofr/devroot/gofr-console
+
+# Vite dev server port
+EXPOSE 3000
+
+USER gofr
+CMD ["tail", "-f", "/dev/null"]
