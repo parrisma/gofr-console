@@ -2,30 +2,68 @@
 # React + MUI frontend development environment
 FROM node:20-bookworm
 
-# Install dev tools
+# Install dev tools + network debug tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gh \
     git \
     vim \
     jq \
     curl \
+    ca-certificates \
+    iputils-ping \
+    dnsutils \
+    iproute2 \
+    net-tools \
+    netcat-openbsd \
+    telnet \
+    traceroute \
+    tcpdump \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install Docker CLI from Docker's official repository
+RUN set -eux; \
+    install -m 0755 -d /etc/apt/keyrings; \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; \
+    chmod a+r /etc/apt/keyrings/docker.gpg; \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" > /etc/apt/sources.list.d/docker.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin; \
+    rm -rf /var/lib/apt/lists/*
 
-# Create gofr user to match host
-# Remove existing node user (UID 1000) first, then create gofr user
+# Preferred package manager: pnpm
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+
+# Create/align gofr user to match host UID/GID
 ARG UID=1000
 ARG GID=1000
-RUN userdel -r node 2>/dev/null || true && \
-    groupadd -g $GID gofr || true && \
-    useradd -m -u $UID -g $GID -s /bin/bash gofr
+RUN set -eux; \
+    if getent group "$GID" >/dev/null; then \
+        existing_group="$(getent group "$GID" | cut -d: -f1)"; \
+        groupmod -n gofr "$existing_group" || true; \
+    else \
+        groupadd -g "$GID" gofr; \
+    fi; \
+    if getent passwd "$UID" >/dev/null; then \
+        existing_user="$(getent passwd "$UID" | cut -d: -f1)"; \
+        usermod -l gofr "$existing_user" || true; \
+        usermod -d /home/gofr -m gofr; \
+        usermod -g "$GID" gofr; \
+    else \
+        useradd -m -u "$UID" -g "$GID" -s /bin/bash gofr; \
+    fi
 
-# Add gofr user to docker group (group will be created/mapped at runtime)
-# The docker group GID will be set to match the host's docker socket GID
-RUN groupadd -g 999 docker || true \
-    && usermod -aG docker gofr
+# Add gofr user to docker group (matches host docker socket GID at runtime)
+ARG DOCKER_GID=999
+RUN set -eux; \
+    if getent group docker >/dev/null; then \
+        existing_gid="$(getent group docker | cut -d: -f3)"; \
+        if [ "$existing_gid" != "$DOCKER_GID" ]; then \
+            groupmod -g "$DOCKER_GID" docker || true; \
+        fi; \
+    else \
+        groupadd -g "$DOCKER_GID" docker; \
+    fi; \
+    usermod -aG docker gofr
 
 # Create project directory
 RUN mkdir -p /home/gofr/devroot/gofr-console \

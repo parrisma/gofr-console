@@ -1,28 +1,37 @@
 # Copilot Instructions (GOFR Console)
 
-## Security First
-- Assume hostile inputs; validate and sanitize all user-controlled data.
-- Avoid `eval`, `Function`, dynamic `require`, or insecure deserialization.
-- Prefer safe APIs (`fs/promises`, `path`, `URL`) and avoid shelling out.
-- Do not log secrets; redact tokens, keys, and PII.
+## Core
+- Dev container + Docker access.
+- Never use `localhost`; use service hostnames (e.g., `gofr-neo4j`).
+- Prefer repo control scripts for services/auth/ingestion/tests.
+- Keep code simple; debug basics first (env, health, logs, auth, connectivity).
+- If user reminds a preferred pattern, add it here.
 
-## Dependency & CVE Hygiene
-- Minimize dependencies; prefer built-ins and well‑maintained packages.
-- When adding deps, check for active maintenance and known CVEs.
-- Use pinned versions where feasible and avoid abandoned packages.
-- Flag any high/critical CVEs you notice and propose fixes.
+## Security
+- Treat inputs as hostile; validate/sanitize.
+- Avoid `eval`/`Function`/dynamic `require`/unsafe deserialization.
+- Prefer safe APIs (`fs/promises`, `path`, `URL`); avoid shelling out.
+- Never log secrets/PII.
 
-## Node-Specific Hardening
-- Use `npm`/`pnpm` scripts safely; avoid `postinstall` hooks unless required.
-- Beware of path traversal; always resolve/normalize paths.
-- Enforce least privilege on file access and environment variables.
-- Favor `node:20` LTS features and stable APIs.
+## Dependencies & CVEs
+- Minimize deps; prefer maintained packages.
+- Check for CVEs; flag high/critical issues.
+- Pin versions where feasible.
 
-## Testing Expectations
-- Add or update tests for new behavior; prioritize security-relevant cases.
-- Include negative tests for invalid inputs and boundary conditions.
-- Keep tests deterministic and fast; avoid network and time flakiness.
+## Node Hardening
+- Avoid risky `postinstall` scripts.
+- Prevent path traversal; normalize/resolve paths.
+- Enforce least privilege for files/env.
+- Target Node 20 LTS features.
+
+## Testing
+- Add/update tests; include negative/boundary cases.
+- Keep tests fast and deterministic.
 
 ## Build/Run Safety
-- Avoid commands that delete or overwrite existing files without confirmation.
-- Prefer non-destructive scaffolding and clear migration steps.
+- Don’t run destructive commands without confirmation.
+
+## Logging
+- Use the **project logger** (e.g., `StructuredLogger`), **not** `print()` or default logging.
+- Logs must be **clear and actionable**, not cryptic.
+- All errors must include **cause, references/context**, and **recovery options** where possible.
