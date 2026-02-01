@@ -1,6 +1,6 @@
 import { Box, AppBar, Toolbar, Typography, Drawer, IconButton, Breadcrumbs, Link } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
-import { ArrowBack, MonitorHeart } from '@mui/icons-material';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ArrowBack, MonitorHeart, Storage, FileUpload, People } from '@mui/icons-material';
 
 const drawerWidth = 60;
 
@@ -12,9 +12,13 @@ interface ServiceShellProps {
 
 export default function ServiceShell({ children, serviceName, serviceRoute }: ServiceShellProps) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const navItems = [
     { path: `${serviceRoute}/health`, icon: <MonitorHeart />, label: 'Health' },
+    { path: `${serviceRoute}/sources`, icon: <Storage />, label: 'Sources' },
+    { path: `${serviceRoute}/clients`, icon: <People />, label: 'Clients' },
+    { path: `${serviceRoute}/ingest`, icon: <FileUpload />, label: 'Ingest' },
   ];
 
   return (
@@ -58,7 +62,7 @@ export default function ServiceShell({ children, serviceName, serviceRoute }: Se
           {navItems.map((item) => (
             <IconButton
               key={item.path}
-              color="primary"
+              color={location.pathname === item.path ? 'primary' : 'inherit'}
               onClick={() => navigate(item.path)}
               sx={{ mb: 2 }}
               title={item.label}

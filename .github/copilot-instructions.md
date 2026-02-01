@@ -7,6 +7,10 @@
 - Keep code simple; debug basics first (env, health, logs, auth, connectivity).
 - If user reminds a preferred pattern, add it here.
 
+## Documentation
+- **MCP Tool Interface**: `/home/gofr/devroot/gofr-console/tmp/mcp-tool-interface.md` - Complete GOFR-IQ MCP API specification, tools, parameters, and response formats
+- **Neo4j Schema**: `/home/gofr/devroot/gofr-console/tmp/neo4j-schema.md` - Knowledge graph schema, node types, relationships, and data model
+
 ## MCP (Model Context Protocol) Integration
 GOFR MCP servers use **HTTP Streamable** protocol (not simple REST).
 
