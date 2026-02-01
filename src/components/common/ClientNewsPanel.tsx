@@ -5,7 +5,7 @@ import {
   List,
   ListItem,
   ListItemText,
-  CircularProgress,
+  Skeleton,
   Alert,
   Box,
   Chip,
@@ -38,16 +38,24 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    
     const fetchNews = async () => {
       if (!clientGuid || !authToken) {
         return;
       }
       
       console.log('Fetching news for client:', clientName, clientGuid);
+      const startTime = performance.now();
       setLoading(true);
       setError(null);
       try {
         const response = await api.getClientFeed(authToken, clientGuid, 10, 0);
+        if (cancelled) {
+          console.log(`News fetch for ${clientName} cancelled (stale)`);
+          return;
+        }
+        console.log(`get_top_client_news for ${clientName}: ${(performance.now() - startTime).toFixed(0)}ms`);
         console.log('Client feed response:', response);
         if (response.articles && Array.isArray(response.articles)) {
           setArticles(response.articles);
@@ -55,14 +63,21 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
           setArticles([]);
         }
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load client news feed');
         setArticles([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchNews();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [clientGuid, clientName, authToken]);
 
   const getTierColor = (tier: string): 'error' | 'warning' | 'info' | 'default' => {
@@ -92,31 +107,42 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
     }
   };
 
-  const LoadingOverlay = () => (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        bgcolor: 'rgba(255, 255, 255, 0.8)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1,
-      }}
-    >
-      <CircularProgress size={40} />
-      <Typography variant="body2" sx={{ mt: 2 }} color="text.secondary">
-        Loading news from MCP server...
+  const SkeletonNews = () => (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="h6" gutterBottom>
+        Top News for {clientName}
       </Typography>
-    </Box>
+      <Skeleton variant="text" width="80%" sx={{ mb: 2 }} />
+      <List sx={{ pt: 0 }}>
+        {[1, 2, 3].map((i) => (
+          <React.Fragment key={i}>
+            {i > 1 && <Divider />}
+            <ListItem sx={{ px: 0, py: 1.5, flexDirection: 'column', alignItems: 'stretch' }}>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                <Skeleton variant="rounded" width={60} height={24} />
+                <Skeleton variant="rounded" width={40} height={24} />
+              </Box>
+              <Skeleton variant="text" width="90%" height={28} />
+              <Skeleton variant="text" width="60%" sx={{ mt: 0.5 }} />
+              <Box sx={{ display: 'flex', gap: 0.5, mt: 1 }}>
+                <Skeleton variant="rounded" width={50} height={20} />
+                <Skeleton variant="rounded" width={70} height={20} />
+              </Box>
+              <Skeleton variant="text" width="100%" sx={{ mt: 1 }} />
+              <Skeleton variant="text" width="85%" />
+            </ListItem>
+          </React.Fragment>
+        ))}
+      </List>
+    </Paper>
   );
 
+  if (loading) {
+    return <SkeletonNews />;
+  }
+
   return (
-    <Paper sx={{ p: 2, position: 'relative', minHeight: 200 }}>
+    <Paper sx={{ p: 2 }}>
       <Typography variant="h6" gutterBottom>
         Top News for {clientName}
       </Typography>
@@ -124,22 +150,20 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
         Most relevant articles for this client based on fund type, holdings, and watchlist
       </Typography>
 
-      {loading && <LoadingOverlay />}
-
       {error && (
         <Alert severity="error" sx={{ mt: 2 }}>
           {error}
         </Alert>
       )}
 
-      {!loading && !error && articles.length === 0 && (
+      {!error && articles.length === 0 && (
         <Alert severity="info" sx={{ mt: 2 }}>
           No news articles found for this client
         </Alert>
       )}
 
-      {!loading && !error && articles.length > 0 && (
-        <List sx={{ pt: 0 }}>
+      {!error && articles.length > 0 && (
+        <List sx={{ pt: 0, maxHeight: 400, overflow: 'auto' }}>
           {articles.map((article, index) => (
             <React.Fragment key={article.document_guid || article.guid || index}>
               {index > 0 && <Divider />}

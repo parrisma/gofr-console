@@ -9,9 +9,8 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
-  CircularProgress,
+  Skeleton,
   Alert,
-  Box,
 } from '@mui/material';
 import { api } from '../../services/api';
 
@@ -40,25 +39,42 @@ export const PortfolioPanel: React.FC<PortfolioPanelProps> = ({ clientGuid, auth
   const [order, setOrder] = useState<OrderDirection>('desc');
 
   useEffect(() => {
+    let cancelled = false;
+    
     const fetchHoldings = async () => {
+      console.log('Fetching portfolio for client:', clientGuid);
+      const startTime = performance.now();
       setLoading(true);
       setError(null);
       try {
         const response = await api.getPortfolioHoldings(authToken, clientGuid);
+        if (cancelled) {
+          console.log(`Portfolio fetch for ${clientGuid} cancelled (stale)`);
+          return;
+        }
+        console.log(`getPortfolioHoldings for ${clientGuid}: ${(performance.now() - startTime).toFixed(0)}ms`);
         if (response.holdings && Array.isArray(response.holdings)) {
           setHoldings(response.holdings);
         } else {
           setHoldings([]);
         }
       } catch (err) {
+        if (cancelled) return;
+        console.log(`getPortfolioHoldings for ${clientGuid}: ${(performance.now() - startTime).toFixed(0)}ms (error)`);
         setError(err instanceof Error ? err.message : 'Failed to load portfolio holdings');
         setHoldings([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchHoldings();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [clientGuid, authToken]);
 
   const handleSort = (property: keyof Holding) => {
@@ -82,29 +98,42 @@ export const PortfolioPanel: React.FC<PortfolioPanelProps> = ({ clientGuid, auth
       : bString.localeCompare(aString);
   });
 
-  const LoadingOverlay = () => (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        bgcolor: 'rgba(255, 255, 255, 0.8)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1,
-      }}
-    >
-      <CircularProgress />
-      <Typography sx={{ mt: 2 }}>Loading portfolio from MCP server...</Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-        This may take a few moments
+  const SkeletonTable = () => (
+    <Paper sx={{ p: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Portfolio Holdings
       </Typography>
-    </Box>
+      <Skeleton variant="text" width={120} sx={{ mb: 2 }} />
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Ticker</TableCell>
+              <TableCell>Name</TableCell>
+              <TableCell align="right">Weight %</TableCell>
+              <TableCell align="right">Shares</TableCell>
+              <TableCell align="right">Avg Cost</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton variant="text" width={50} /></TableCell>
+                <TableCell><Skeleton variant="text" width={150} /></TableCell>
+                <TableCell align="right"><Skeleton variant="text" width={60} /></TableCell>
+                <TableCell align="right"><Skeleton variant="text" width={70} /></TableCell>
+                <TableCell align="right"><Skeleton variant="text" width={70} /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Paper>
   );
+
+  if (loading) {
+    return <SkeletonTable />;
+  }
 
   if (error) {
     return (
@@ -126,8 +155,7 @@ export const PortfolioPanel: React.FC<PortfolioPanelProps> = ({ clientGuid, auth
   }
 
   return (
-    <Paper sx={{ p: 3, position: 'relative', minHeight: loading ? 200 : 'auto' }}>
-      {loading && <LoadingOverlay />}
+    <Paper sx={{ p: 3 }}>
       <Typography variant="h6" gutterBottom>
         Portfolio Holdings
       </Typography>

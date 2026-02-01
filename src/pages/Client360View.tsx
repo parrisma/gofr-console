@@ -93,6 +93,7 @@ export default function Client360View() {
 
     try {
       const result = await api.listClients(selectedToken.token);
+      console.log('Clients loaded:', result.clients?.map((c: Client) => ({ name: c.name, guid: c.guid })));
       setClients(result.clients || []);
       
       // Auto-select first valid client
@@ -195,7 +196,10 @@ export default function Client360View() {
                   <ListItem disablePadding>
                     <ListItemButton
                       selected={selectedClientGuid === client.guid}
-                      onClick={() => setSelectedClientGuid(client.guid)}
+                      onClick={() => {
+                        console.log('Selecting client:', client.name, client.guid);
+                        setSelectedClientGuid(client.guid);
+                      }}
                       disabled={isInvalidGuid}
                     >
                       <ListItemText
@@ -269,10 +273,10 @@ export default function Client360View() {
 
                     {/* Right: News Feed */}
                     <Box sx={{ flex: 1, minWidth: 400 }}>
-                      {selectedToken && clientProfile && (
+                      {selectedToken && selectedClient && (
                         <ClientNewsPanel 
                           clientGuid={selectedClientGuid} 
-                          clientName={clientProfile.name}
+                          clientName={selectedClient.name}
                           authToken={selectedToken.token} 
                         />
                       )}

@@ -9,10 +9,8 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
-  CircularProgress,
+  Skeleton,
   Alert,
-  Box,
-  Chip,
   IconButton,
   Tooltip,
 } from '@mui/material';
@@ -50,11 +48,20 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
   const [order, setOrder] = useState<OrderDirection>('asc');
 
   useEffect(() => {
+    let cancelled = false;
+    
     const fetchWatchlist = async () => {
+      console.log('Fetching watchlist for client:', clientGuid);
+      const startTime = performance.now();
       setLoading(true);
       setError(null);
       try {
         const response = await api.getClientWatchlist(authToken, clientGuid);
+        if (cancelled) {
+          console.log(`Watchlist fetch for ${clientGuid} cancelled (stale)`);
+          return;
+        }
+        console.log(`getClientWatchlist for ${clientGuid}: ${(performance.now() - startTime).toFixed(0)}ms`);
         // Response can have either 'items' or 'watchlist' array
         const items = response.items || response.watchlist;
         if (items && Array.isArray(items)) {
@@ -63,14 +70,21 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
           setWatchlist([]);
         }
       } catch (err) {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load watchlist');
         setWatchlist([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchWatchlist();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [clientGuid, authToken]);
 
   const handleSort = (property: keyof WatchlistItem) => {
@@ -105,29 +119,44 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
     return false;
   };
 
-  const LoadingOverlay = () => (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        bgcolor: 'rgba(255, 255, 255, 0.8)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1,
-      }}
-    >
-      <CircularProgress />
-      <Typography sx={{ mt: 2 }}>Loading watchlist from MCP server...</Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
-        This may take a few moments
+  const SkeletonTable = () => (
+    <Paper sx={{ p: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Watchlist
       </Typography>
-    </Box>
+      <Skeleton variant="text" width={140} sx={{ mb: 2 }} />
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Ticker</TableCell>
+              <TableCell>Name</TableCell>
+              <TableCell align="right">Price Alert</TableCell>
+              <TableCell align="right">Volume Alert</TableCell>
+              <TableCell align="center">Status</TableCell>
+              <TableCell align="center">Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {[1, 2, 3, 4].map((i) => (
+              <TableRow key={i}>
+                <TableCell><Skeleton variant="text" width={50} /></TableCell>
+                <TableCell><Skeleton variant="text" width={130} /></TableCell>
+                <TableCell align="right"><Skeleton variant="text" width={60} /></TableCell>
+                <TableCell align="right"><Skeleton variant="text" width={70} /></TableCell>
+                <TableCell align="center"><Skeleton variant="rounded" width={60} height={24} /></TableCell>
+                <TableCell align="center"><Skeleton variant="circular" width={24} height={24} /></TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Paper>
   );
+
+  if (loading) {
+    return <SkeletonTable />;
+  }
 
   if (error) {
     return (
@@ -149,8 +178,7 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
   }
 
   return (
-    <Paper sx={{ p: 3, position: 'relative', minHeight: loading ? 200 : 'auto' }}>
-      {loading && <LoadingOverlay />}
+    <Paper sx={{ p: 3 }}>
       <Typography variant="h6" gutterBottom>
         Watchlist
       </Typography>
