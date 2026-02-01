@@ -1,0 +1,67 @@
+get_top_client_news - Feature Guide
+
+WHAT IT DOES
+Returns the top 3 most relevant news items for a specific client, combining:
+- Portfolio holdings - news affecting stocks they own
+- Watchlist items - news about instruments they're tracking
+- Lateral connections - news about competitors, suppliers, and sector peers
+- Semantic relevance - news matching their investment style and mandate
+
+WHEN TO USE IT
+Use this tool when asked questions like:
+- "What should I tell my client today?"
+- "What's the top news for [client name]?"
+- "Give me talking points for my meeting with [client]"
+- "What's relevant for this hedge fund/pension client?"
+
+HOW IT WORKS
+The tool scores each news item using four factors:
+1. Graph relevance (35%) - Direct holdings score highest, then watchlist, then competitors/suppliers
+2. Semantic fit (35%) - How well the news matches the client's investment mandate and style
+3. Impact score (20%) - Market significance of the news (Platinum > Gold > Silver)
+4. Recency (10%) - Fresher news ranks higher
+
+OUTPUT INCLUDES
+Each news item returns:
+- Title and document ID
+- Impact tier (PLATINUM/GOLD/SILVER/BRONZE)
+- Affected instruments (tickers)
+- Reasons why it's relevant (e.g., DIRECT_HOLDING, WATCHLIST, SUPPLY_CHAIN, COMPETITOR, SEMANTIC_MATCH)
+- "Why it matters" - A short client-specific explanation
+
+PARAMETERS
+- limit (default: 3) - Number of items to return (1-10)
+- time_window_hours (default: 24) - Look back period (1-168 hours)
+- min_impact_score (default: None) - Minimum impact score (0-100)
+- impact_tiers (default: All) - Filter by tier: PLATINUM, GOLD, SILVER, BRONZE
+- include_portfolio (default: true) - Include portfolio holdings
+- include_watchlist (default: true) - Include watchlist items
+- include_lateral_graph (default: true) - Include competitors/suppliers/peers
+
+EXAMPLE RESPONSE
+"Here are the top 3 items for Apex Capital:
+
+1. Apple Supply Chain Disruption (GOLD)
+   Affects: AAPL, TSM
+   Why: Direct holding AAPL and supply chain TSM both affected
+   Reasons: DIRECT_HOLDING, SUPPLY_CHAIN
+
+2. Tech Sector Earnings Preview (SILVER)
+   Affects: GOOGL, MSFT
+   Why: Watchlist items in same sector showing momentum
+   Reasons: WATCHLIST, PEER
+
+3. Fed Rate Decision Impact (PLATINUM)
+   Affects: SPY, QQQ
+   Why: Benchmark exposure with high macro sensitivity
+   Reasons: SEMANTIC_MATCH, BENCHMARK"
+
+CLIENT TYPE BEHAVIOR
+- Hedge funds - Higher weight on recency (fast-moving)
+- Long-only/Pension - Higher weight on fundamentals over timing
+- ESG-constrained - Automatically filters out excluded companies/sectors
+
+PREREQUISITES
+The client must exist in the system with:
+- A portfolio (holdings) OR watchlist
+- Group membership for news access

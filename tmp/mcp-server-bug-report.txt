@@ -1,0 +1,67 @@
+BUG REPORT: Neo4j Query Syntax Errors in MCP Server
+=====================================================
+
+ISSUE: Two MCP tools are failing due to Neo4j syntax errors
+
+AFFECTED TOOLS:
+1. get_portfolio_holdings
+2. get_client_watchlist
+
+ERROR DETAILS:
+--------------
+Neo4j Error Code: Neo.ClientError.Statement.SyntaxError
+Message: Invalid input 'NULLS': expected 'FOREACH', ',', 'ORDER BY', etc.
+Location: Line 11, column 44 (offset: 548)
+Query Fragment: "ORDER BY h.weight DESC NULLS LAST"
+
+ROOT CAUSE:
+-----------
+The Cypher queries use "NULLS LAST" syntax which is not supported in the current Neo4j version.
+This syntax was added in Neo4j 5.x but the server appears to be running an earlier version.
+
+EXPECTED vs ACTUAL:
+-------------------
+Current (broken):  ORDER BY h.weight DESC NULLS LAST
+Required (works):  ORDER BY h.weight DESC
+
+ADDITIONAL PROBLEM:
+-------------------
+When these queries fail, the MCP server returns non-JSON error responses like:
+"Unknown to..." which causes JSON parse errors in the client.
+
+Error responses should always be valid JSON format:
+{"status": "error", "message": "description"}
+
+RESOLUTION NEEDED:
+------------------
+1. Remove "NULLS LAST" and "NULLS FIRST" from all ORDER BY clauses in:
+   - get_portfolio_holdings query
+   - get_client_watchlist query
+   
+2. Ensure all error responses are valid JSON format
+
+3. Test both tools return valid responses with valid client GUIDs
+
+TESTING:
+--------
+Valid client GUID for testing: 751c34ea-a37a-40af-ada5-ea37d7541b0f
+Auth token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZGEyZjk3Ni04YjRmLTRlNzQtOGNlOS03YjNkOWNhYjRlZDAiLCJncm91cHMiOlsiYWRtaW4iXSwiaWF0IjoxNzY5NzI2NjQ0LCJleHAiOjIwODUwODY2NDQsIm5iZiI6MTc2OTcyNjY0NCwiYXVkIjoiZ29mci1hcGkifQ.1DY75mere_IuvVYVOOSfCGqO1spzzFaDT_sjfHJZLf8
+
+Expected response format:
+{"status": "success", "data": {"holdings": [...]} }
+{"status": "success", "data": {"watchlist": [...]} }
+
+RESOLUTION APPLIED:
+-------------------
+Date: 2026-02-01
+Status: FIXED ✓
+
+Changes:
+- Fixed Neo4j syntax error by replacing "ORDER BY h.weight DESC NULLS LAST" 
+  with "ORDER BY coalesce(h.weight, -1) DESC" in get_portfolio_holdings
+- Location: app/tools/client_tools.py
+- Rebuilt prod image and restarted services
+- Verified with client 751c34ea-a37a-40af-ada5-ea37d7541b0f: 
+  Both holdings + watchlist now return JSON success responses
+  
+Note: get_watchlist_items never used NULLS LAST syntax in this codebase

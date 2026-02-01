@@ -1,6 +1,6 @@
 import { Box, AppBar, Toolbar, Typography, Drawer, IconButton, Breadcrumbs, Link } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowBack, MonitorHeart, Storage, FileUpload, People } from '@mui/icons-material';
+import { ArrowBack, MonitorHeart, Storage, FileUpload, People, Dashboard } from '@mui/icons-material';
 
 const drawerWidth = 60;
 
@@ -18,6 +18,7 @@ export default function ServiceShell({ children, serviceName, serviceRoute }: Se
     { path: `${serviceRoute}/health`, icon: <MonitorHeart />, label: 'Health' },
     { path: `${serviceRoute}/sources`, icon: <Storage />, label: 'Sources' },
     { path: `${serviceRoute}/clients`, icon: <People />, label: 'Clients' },
+    { path: `${serviceRoute}/client-360`, icon: <Dashboard />, label: 'Client 360' },
     { path: `${serviceRoute}/ingest`, icon: <FileUpload />, label: 'Ingest' },
   ];
 

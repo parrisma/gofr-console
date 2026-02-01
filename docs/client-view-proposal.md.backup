@@ -384,7 +384,7 @@ curl -s -X POST "http://gofr-iq-mcp:8080/mcp" \
 
 **Blocked By:** No `search_tickers(prefix)` API available.
 
-**MCP Verification (Phase 2):**
+**MCP Verification:**
 
 ```bash
 # Add to watchlist
@@ -402,11 +402,11 @@ curl -s -X POST "http://gofr-iq-mcp:8080/mcp" \
 ```
 
 **Design Notes:**
+
 * Command bar should be always accessible (sticky header or keyboard shortcut Ctrl+K).
-* Ticker validation: Use `search_tickers()` to validate ticker exists before adding.
+* Ticker validation: Check if ticker exists via `get_market_context()` before adding.
 
 **Deliverable:** `CommandBar.tsx` with ticker autocomplete and MCP integration.
-
 
 ---
 
@@ -425,19 +425,20 @@ curl -s -X POST "http://gofr-iq-mcp:8080/mcp" \
 
 **Phase 2 Enhancements:**
 
-6. 🚫 Expiry Date - requires `expiry_date` property support.
-7. 🚫 Price level (Support/Resistance) - requires API enhancement.
-8. 🚫 Event type triggers - requires watchlist API enhancement.
+1. 🚫 Expiry Date - requires `expiry_date` property support.
+2. 🚫 Price level (Support/Resistance) - requires API enhancement.
+3. 🚫 Event type triggers - requires watchlist API enhancement.
 
 **MCP Verification:**
+
 * Same as 5.6 (update uses same endpoint).
 
 **Design Notes:**
+
 * Use Material UI `Slider` for threshold (0-100).
 * Add "Remove" button → calls `removeFromWatchlist()`.
 
 **Deliverable:** `WatchlistEditModal.tsx` with update/delete functionality.
-
 
 ---
 
@@ -543,55 +544,144 @@ curl -s -X POST "http://gofr-iq-mcp:8080/mcp" \
 **Objective:** Verify all MCP interactions and UI flows.
 **API Status:** Testing existing API integrations.
 
-**Test Cases (Phase 1):**
+**Test Cases:**
 
-1. ✅ **Client Selection:** Click client in list → loads profile, portfolio, watchlist, news.
-2. ✅ **Edit Watchlist:** Click existing watchlist ticker → modal opens → update threshold → saves.
-3. ✅ **Remove from Watchlist:** Click remove button in modal → ticker removed from watchlist.
-4. ✅ **News Filtering:** Set min impact to 80 → only GOLD/PLATINUM articles shown.
-5. ✅ **Portfolio News Heatmap:** Holdings with recent high-impact news show visual indicators.
-
-**Phase 2 Test Cases:**
-
-6. 🚫 **Quick-Add:** Type ticker in command bar with autocomplete → ticker added to watchlist.
-7. 🚫 **Reverse Lookup:** Search for ticker → shows all clients holding/watching it.
+1. \u2705 **Client Selection:** Click client in list \u2192 loads profile, portfolio, watchlist, news.
+2. \u26a0\ufe0f **Quick-Add:** Type ticker from list (`BANKO`, `BLK`, etc.) in command bar \u2192 ticker added to watchlist. (No autocomplete validation)
+3. \u2705 **Edit Watchlist:** Double-click ticker \u2192 modal opens \u2192 update threshold \u2192 saves.
+4. \u2705 **News Filtering:** Set min impact to 80 \u2192 only GOLD/PLATINUM articles shown.
+5. \ud83d\udeab **Reverse Lookup:** \u274c BLOCKED - Not implementable with current API.
 
 **MCP Error Scenarios:**
-* Invalid client_guid → Show "Client not found" message.
-* Network timeout → Show retry button.
+* Invalid client_guid \u2192 Show "Client not found" message.
+* Invalid ticker (not in simulated universe) \u2192 Show "Ticker not recognized" warning.
+* Network timeout \u2192 Show retry button.
 
-**Deliverable:** Test plan document with Phase 1 test cases.
+**Deliverable:** Test plan document with Phase 1 test cases only.
+
+---
+
+### 5.12 Performance Optimization ⚠️ PARTIAL
+
+**Objective:** Reduce MCP call overhead and improve UX.
+**API Status:** Client-side optimizations are feasible; backend batching is not available.
+
+**Phase 1 Tasks:**
+
+1. ✅ Implement client-side caching (React Query or similar).
+2. ✅ Add pagination to news feed (client-side implementation).
+3. ✅ Debounce news impact checks to reduce API calls.
+
+**Phase 2 Tasks:**
+
+1. 🚫 Batch portfolio/watchlist/news fetches - requires backend `get_client_360()` API.
+2. 🚫 Lazy load ticker autocomplete - requires `search_tickers()` API.
+
+**Deliverable:** Performance report showing sub-500ms load times for Client 360 view.
+
+---
+
+## 6. MVP Scope (Current API Support)
+
+### Phase 1 Implementation - READY NOW ✅
+
+Based on current GOFR-IQ MCP API capabilities, the following features can be implemented immediately:
+
+**Core Functionality:**
+* Client list and profile display
+* Portfolio holdings view (ticker, weight, shares, avg_cost)
+* Watchlist items view (ticker, alert_threshold)
+* Client-specific news feed with impact scoring
+* News heatmap on portfolio holdings
+* Basic watchlist add/remove operations
+
+**Limitations:**
+* No ticker autocomplete (use hardcoded list of 12 simulated tickers)
+* No benchmark comparison
+* No sector/region aggregation
+* No reverse inquiry (ticker → clients lookup)
+* No watchlist expiry dates or price levels
+* No ESG exclusion details
+
+### Phase 2 Requirements - BLOCKED 🚫
+
+The following features require backend API enhancements and are **ON HOLD**:
+
+**Blocked Features:**
+* Reverse inquiry / "Axe Sheet" (ticker → clients)
+* Ticker autocomplete / search
+* Watchlist themes/grouping
+* Suggested tickers (recommendation engine)
+* Sector/Region portfolio aggregation
+* Benchmark vs. portfolio comparison
+* ESG exclusion details (specific restricted companies/sectors)
+* Watchlist expiry dates and price triggers
+* Event-based watchlist alerts
+
+---
+
+## 7. MCP API Improvements (Backend Enhancements)
+
+To enable Phase 2 features, the following MCP tools should be added or enhanced:
+
+1. **`get_client_360(client_guid)`** - Single call to fetch profile + portfolio + watchlist + recent news.
+2. **`get_ticker_exposure(ticker)`** - Returns all clients with positions/watchlist items for a ticker.
+3. **`batch_get_instrument_news(tickers[], days_back)`** - Fetch news for multiple tickers in one call.
+4. **`search_tickers(prefix)`** - Autocomplete support for ticker entry.
+
+These enhancements will reduce client-side API call count by ~70% and improve responsiveness.
+
+---
+
+## 8. Summary: MVP vs. Full Vision
+
+### What We Can Build Now (Phase 1 MVP)
+
+**Client 360 Dashboard - Core Features:**
+
+1. \u2705 Client selection from list
+2. \u2705 Profile header (Name, Type, Mandate, ESG flag)
+3. \u2705 Portfolio holdings table (Ticker, Weight, Shares, Avg Cost)
+4. \u2705 News heatmap on holdings (visual impact indicators)
+5. \u2705 Watchlist panel (Tickers with alert thresholds)
+6. \u2705 Client-specific news feed (filtered by holdings + watchlist)
+7. \u2705 Quick-add command bar (manual ticker entry)
+8. \u2705 Watchlist edit modal (adjust alert threshold, remove ticker)
+
+**User Workflow Supported:**
+* Sales trader can view client profile and holdings
+* Instantly see which holdings have recent high-impact news
+* Add/remove tickers from watchlist
+* Filter news by impact level
+* Adjust alert thresholds per ticker
+
+**Data Quality Note:**
+* Current backend has invalid GUIDs in test data (`client-hedge-fund` instead of UUID). Frontend validates to prevent crashes.
 
 ---
 
 ### What's Missing (Phase 2 - Blocked)
 
-**Critical Gap: No Way to Add Watchlist Items**
-- ❌ Cannot add new tickers to watchlist from UI (requires ticker search/validation API)
-- **Impact:** Sales traders must use backend tools to populate watchlists, then can only edit/remove via UI.
-
 **Critical Gap: Reverse Inquiry**
-- ❌ Cannot answer "Who holds TSLA?" without N×2 API calls
-- ❌ No "Axe Sheet" functionality
-- **Impact:** Sales traders cannot efficiently discover which clients care about breaking news on a specific ticker.
+* \u274c Cannot answer "Who holds TSLA?" without N\u00d72 API calls
+* \u274c No "Axe Sheet" functionality
+* **Impact:** Sales traders cannot efficiently discover which clients care about breaking news on a specific ticker.
 
 **UX Enhancements Blocked:**
-- ❌ Ticker autocomplete / search (no `search_tickers()` API)
-- ❌ Quick-add command bar (depends on ticker search)
-- ❌ Watchlist themes/grouping
-- ❌ Suggested tickers (recommendation engine)
-- ❌ Portfolio sector/region aggregation
-- ❌ Benchmark comparison
-- ❌ Drag-and-drop between panels
-- ❌ Watchlist expiry dates
-- ❌ Price-level triggers (support/resistance)
-- ❌ Event-based alerts (earnings, M&A)
-- ❌ Specific ESG exclusion details
+* \u274c Ticker autocomplete (no search API)
+* \u274c Watchlist themes/grouping
+* \u274c Suggested tickers (recommendation engine)
+* \u274c Portfolio sector/region aggregation
+* \u274c Benchmark comparison
+* \u274c Drag-and-drop between panels
+* \u274c Watchlist expiry dates
+* \u274c Price-level triggers (support/resistance)
+* \u274c Event-based alerts (earnings, M&A)
+* \u274c Specific ESG exclusion details
 
 **Compliance/Risk Features Blocked:**
-- ❌ Cannot show "Client cannot trade Tobacco stocks" (only generic ESG flag)
-- ❌ Cannot show benchmark tracking error
-
+* \u274c Cannot show "Client cannot trade Tobacco stocks" (only generic ESG flag)
+* \u274c Cannot show benchmark tracking error
 
 ---
 
@@ -600,19 +690,19 @@ curl -s -X POST "http://gofr-iq-mcp:8080/mcp" \
 **Proceed with Phase 1 MVP** - The core workflow (Client → Portfolio → News → Watchlist View/Edit) is implementable with the caveat that **adding new watchlist items must be done via backend tools or API calls** outside the UI.
 
 **Phase 1 provides:**
-- Read-only portfolio view with news impact visualization
-- Watchlist viewing and threshold editing
-- Client-specific news filtering
+* Read-only portfolio view with news impact visualization
+* Watchlist viewing and threshold editing
+* Client-specific news filtering
 
 **Phase 1 does NOT provide:**
-- Ability to add new tickers to watchlist from UI (blocks primary workflow)
+* Ability to add new tickers to watchlist from UI (blocks primary workflow)
 
 **Prioritize Backend API for Phase 2 (in order):**
+
 1. `search_tickers(prefix)` - **CRITICAL** - Unblocks watchlist add functionality
 2. `get_ticker_exposure(ticker)` - Enables Reverse Inquiry ("Axe Sheet")
 3. `get_client_360(client_guid)` - Performance optimization (batch fetch)
 4. `get_client_exclusions(client_guid)` - Compliance safety
-
 
 **Estimated Timeline:**
 * Phase 1 MVP: 2-3 weeks (frontend only)

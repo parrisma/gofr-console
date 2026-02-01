@@ -274,15 +274,6 @@ export const api = {
     port: configStore.getMcpPort('gofr-iq'),
   }),
 
-  // Stub functions (to be replaced with real MCP calls)
-  getClientFeed: async (guid: string) => ({
-    client_guid: guid,
-    articles: [
-      { title: 'Fed Raises Rates', impact_score: 85, ticker: 'SPY', published: '2026-01-30' },
-      { title: 'Tech Sector Rally', impact_score: 72, ticker: 'QQQ', published: '2026-01-29' },
-    ],
-  }),
-
   // List sources from GOFR-IQ
   listSources: async (authToken: string) => {
     const client = getMcpClient('gofr-iq');
@@ -464,7 +455,17 @@ export const api = {
       if (parsed.status === 'error') {
         throw new Error(parsed.message || 'Failed to list clients');
       }
-      return parsed.data || parsed;
+      const data = parsed.data || parsed;
+      
+      // Map client_guid to guid for consistency
+      if (data.clients && Array.isArray(data.clients)) {
+        data.clients = data.clients.map((c: any) => ({
+          ...c,
+          guid: c.client_guid || c.guid,
+        }));
+      }
+      
+      return data;
     } catch (err) {
       if (err instanceof Error) {
         throw err;
@@ -498,6 +499,155 @@ export const api = {
         throw err;
       }
       throw new Error('Failed to parse client profile response');
+    }
+  },
+
+  // Get client news feed using get_top_client_news
+  getClientFeed: async (
+    authToken: string,
+    clientGuid: string,
+    limit: number = 10,
+    minTrust: number = 0
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('get_top_client_news', {
+      client_guid: clientGuid,
+      limit: Math.min(limit, 10), // Max 10 per tool spec
+      time_window_hours: 24,
+      include_portfolio: true,
+      include_watchlist: true,
+      include_lateral_graph: true,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from get_client_feed');
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to get client news');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to parse client news response');
+    }
+  },
+
+  // Get portfolio holdings for a client
+  getPortfolioHoldings: async (authToken: string, clientGuid: string) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('get_portfolio_holdings', {
+      client_guid: clientGuid,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from get_portfolio_holdings');
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        // Extract meaningful error message
+        const errorMsg = parsed.message || 'Failed to get portfolio holdings';
+        // Check for Neo4j syntax errors
+        if (errorMsg.includes('NULLS')) {
+          throw new Error('Portfolio API error: Neo4j query syntax not supported in this version');
+        }
+        throw new Error(`Portfolio API error: ${errorMsg}`);
+      }
+      // Extract nested data if present
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        // JSON parse error - response is not valid JSON
+        console.error('Non-JSON response from get_portfolio_holdings:', textContent);
+        throw new Error('Portfolio API returned invalid response format');
+      }
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to parse portfolio holdings response');
+    }
+  },
+
+  // Get client watchlist
+  getClientWatchlist: async (authToken: string, clientGuid: string) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('get_watchlist_items', {
+      client_guid: clientGuid,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from get_watchlist_items');
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        const errorMsg = parsed.message || 'Failed to get client watchlist';
+        if (errorMsg.includes('NULLS')) {
+          throw new Error('Watchlist API error: Neo4j query syntax not supported in this version');
+        }
+        throw new Error(`Watchlist API error: ${errorMsg}`);
+      }
+      // Extract nested data if present
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof SyntaxError) {
+        console.error('Non-JSON response from get_watchlist_items:', textContent);
+        throw new Error('Watchlist API returned invalid response format');
+      }
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to parse client watchlist response');
+    }
+  },
+
+  // Get instrument news
+  getInstrumentNews: async (
+    authToken: string,
+    ticker: string,
+    daysBack: number = 7,
+    minImpactScore: number = 50
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('get_instrument_news', {
+      ticker,
+      days_back: daysBack,
+      min_impact_score: minImpactScore,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      return { ticker, articles: [], total_found: 0 };
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        console.warn(`get_instrument_news error for ${ticker}:`, parsed.message);
+        return { ticker, articles: [], total_found: 0 };
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      console.warn(`Failed to parse news for ${ticker}:`, err);
+      return { ticker, articles: [], total_found: 0 };
     }
   },
 };

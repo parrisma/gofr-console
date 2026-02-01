@@ -127,6 +127,11 @@
       "name": "admin",
       "groups": "all",
       "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZGEyZjk3Ni04YjRmLTRlNzQtOGNlOS03YjNkOWNhYjRlZDAiLCJncm91cHMiOlsiYWRtaW4iXSwiaWF0IjoxNzY5NzI2NjQ0LCJleHAiOjIwODUwODY2NDQsIm5iZiI6MTc2OTcyNjY0NCwiYXVkIjoiZ29mci1hcGkifQ.1DY75mere_IuvVYVOOSfCGqO1spzzFaDT_sjfHJZLf8"
+    },
+    {
+      "name": "all",
+      "groups": "all",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJiYmRlZTU3ZC0xNmY4LTQ2MDUtYjk1Ni1hNWUxMDY3OGU4MDAiLCJncm91cHMiOlsiYWRtaW4iLCJwdWJsaWMiLCJncm91cC1zaW11bGF0aW9uIiwidXNfc2FsZXMiLCJ1cy1zYWxlcyIsImFwYWNfc2FsZXMiLCJhcGFjLXNhbGVzIl0sImlhdCI6MTc2OTk0NzE2NiwiZXhwIjoxNzcwNTUxOTY2LCJuYmYiOjE3Njk5NDcxNjYsImF1ZCI6ImdvZnItYXBpIn0.Pw0eqHZM42MNZeRkmQZAGu_OZOCGsZVfkovMvxKRIog"
     }
   ]
 }

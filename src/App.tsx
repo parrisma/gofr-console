@@ -7,6 +7,8 @@ import GofrIQ from './pages/GofrIQ';
 import GofrIQSources from './pages/GofrIQSources';
 import GofrIQClients from './pages/GofrIQClients';
 import GofrIQIngest from './pages/GofrIQIngest';
+import GofrIQHealthCheck from './pages/GofrIQHealthCheck';
+import Client360View from './pages/Client360View';
 
 function App() {
   return (
@@ -19,6 +21,11 @@ function App() {
             <GofrIQ />
           </ServiceShell>
         } />
+        <Route path="/gofr-iq/health-check" element={
+          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+            <GofrIQHealthCheck />
+          </ServiceShell>
+        } />
         <Route path="/gofr-iq/sources" element={
           <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQSources />
@@ -27,6 +34,11 @@ function App() {
         <Route path="/gofr-iq/clients" element={
           <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQClients />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-iq/client-360" element={
+          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+            <Client360View />
           </ServiceShell>
         } />
         <Route path="/gofr-iq/ingest" element={
