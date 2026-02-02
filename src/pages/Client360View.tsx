@@ -43,6 +43,19 @@ interface ClientProfile {
   turnover_rate?: number;
 }
 
+interface ScoreBreakdown {
+  holdings: { score: number; weight: number };
+  mandate: { score: number; weight: number };
+  constraints: { score: number; weight: number };
+  engagement: { score: number; weight: number };
+}
+
+interface ProfileScore {
+  score: number;
+  breakdown: ScoreBreakdown;
+  missing_fields: string[];
+}
+
 export default function Client360View() {
   const { tokens } = useConfig();
   
@@ -55,6 +68,7 @@ export default function Client360View() {
   const [selectedClientGuid, setSelectedClientGuid] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
+  const [profileScore, setProfileScore] = useState<ProfileScore | null>(null);
   
   // Get selected token safely
   const selectedToken: JwtToken | null =
@@ -113,17 +127,23 @@ export default function Client360View() {
   const loadClientProfile = async (clientGuid: string) => {
     if (!isValidGuid(clientGuid) || !selectedToken?.token) {
       setClientProfile(null);
+      setProfileScore(null);
       return;
     }
 
     setProfileLoading(true);
 
     try {
-      const profile = await api.getClientProfile(selectedToken.token, clientGuid);
+      const [profile, score] = await Promise.all([
+        api.getClientProfile(selectedToken.token, clientGuid),
+        api.getClientProfileScore(selectedToken.token, clientGuid),
+      ]);
       setClientProfile(profile);
+      setProfileScore(score);
     } catch (err) {
       console.error('Failed to load profile:', err);
       setClientProfile(null);
+      setProfileScore(null);
     } finally {
       setProfileLoading(false);
     }
@@ -250,10 +270,15 @@ export default function Client360View() {
                     name={clientProfile.name}
                     clientType={clientProfile.client_type}
                     mandateType={clientProfile.mandate_type}
+                    benchmark={clientProfile.benchmark}
+                    horizon={clientProfile.horizon}
                     alertFrequency={clientProfile.alert_frequency}
                     esgConstrained={clientProfile.esg_constrained}
                     impactThreshold={clientProfile.impact_threshold}
                     turnoverRate={clientProfile.turnover_rate}
+                    completenessScore={profileScore?.score}
+                    scoreBreakdown={profileScore?.breakdown}
+                    missingFields={profileScore?.missing_fields}
                   />
 
                   {/* Portfolio & News Side-by-Side */}

@@ -502,6 +502,34 @@ export const api = {
     }
   },
 
+  // Get client profile completeness score
+  getClientProfileScore: async (authToken: string, clientGuid: string) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('get_client_profile_score', {
+      client_guid: clientGuid,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from get_client_profile_score');
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to get profile score');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to parse profile score response');
+    }
+  },
+
   // Get client news feed using get_top_client_news
   getClientFeed: async (
     authToken: string,
