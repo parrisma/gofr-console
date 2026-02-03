@@ -1,5 +1,7 @@
-import { Box, Paper, Typography, Chip, Stack, Divider, LinearProgress, Tooltip } from '@mui/material';
-import { Warning, CheckCircle, ErrorOutline } from '@mui/icons-material';
+import { Box, Paper, Typography, Chip, Stack, Divider, LinearProgress, Tooltip, IconButton, Collapse } from '@mui/material';
+import { Warning, CheckCircle, ErrorOutline, Edit, ExpandMore } from '@mui/icons-material';
+import { useState } from 'react';
+import { MANDATE_TYPES, HORIZONS, ALERT_FREQUENCIES } from '../../types/clientProfile';
 
 interface ScoreBreakdown {
   holdings: { score: number; weight: number };
@@ -18,9 +20,12 @@ interface ClientHeaderProps {
   esgConstrained?: boolean;
   impactThreshold?: number;
   turnoverRate?: number;
+  mandateText?: string;
   completenessScore?: number;
   scoreBreakdown?: ScoreBreakdown;
   missingFields?: string[];
+  editable?: boolean;
+  onEdit?: () => void;
 }
 
 export default function ClientHeader({
@@ -33,10 +38,17 @@ export default function ClientHeader({
   esgConstrained,
   impactThreshold,
   turnoverRate,
+  mandateText,
   completenessScore,
   scoreBreakdown,
   missingFields,
+  editable = false,
+  onEdit,
 }: ClientHeaderProps) {
+  const [mandateExpanded, setMandateExpanded] = useState(false);
+
+  console.log('ClientHeader received mandateText:', mandateText);
+
   const getScoreColor = (score?: number) => {
     if (!score) return 'error';
     if (score >= 0.7) return 'success';
@@ -60,16 +72,51 @@ export default function ClientHeader({
     ].join(' • ');
   };
 
+  // Helper functions to format display values
+  const formatMandateType = (value?: string) => {
+    if (!value) return null;
+    return MANDATE_TYPES.find(m => m.value === value)?.label || value;
+  };
+
+  const formatHorizon = (value?: string) => {
+    if (!value) return null;
+    return HORIZONS.find(h => h.value === value)?.label || value;
+  };
+
+  const formatAlertFrequency = (value?: string) => {
+    if (!value) return null;
+    return ALERT_FREQUENCIES.find(a => a.value === value)?.label || value;
+  };
+
   return (
     <Paper sx={{ p: 3, mb: 3 }}>
       <Stack spacing={2}>
         {/* Client Name & Type with Completeness Score */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Box>
-            <Typography variant="h4" gutterBottom>
-              {name}
-            </Typography>
-            <Chip label={clientType} color="primary" />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h4" gutterBottom sx={{ mb: 0 }}>
+                  {name}
+                </Typography>
+                {editable && onEdit && (
+                  <IconButton
+                    size="small"
+                    onClick={onEdit}
+                    sx={{
+                      color: 'text.secondary',
+                      '&:hover': {
+                        color: 'primary.main',
+                      },
+                    }}
+                    aria-label="Edit profile"
+                  >
+                    <Edit fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+              <Chip label={clientType} color="primary" sx={{ mt: 1 }} />
+            </Box>
           </Box>
           
           {/* Completeness Score on Right */}
@@ -137,7 +184,7 @@ export default function ClientHeader({
               sx={{ mt: 0.5 }} 
               color={mandateType ? 'text.primary' : 'text.disabled'}
             >
-              {mandateType || '<missing>'}
+              {formatMandateType(mandateType) || '<missing>'}
             </Typography>
           </Box>
 
@@ -163,7 +210,7 @@ export default function ClientHeader({
               sx={{ mt: 0.5 }}
               color={horizon ? 'text.primary' : 'text.disabled'}
             >
-              {horizon || '<missing>'}
+              {formatHorizon(horizon) || '<missing>'}
             </Typography>
           </Box>
 
@@ -176,7 +223,7 @@ export default function ClientHeader({
               sx={{ mt: 0.5 }}
               color={alertFrequency ? 'text.primary' : 'text.disabled'}
             >
-              {alertFrequency || '<missing>'}
+              {formatAlertFrequency(alertFrequency) || '<missing>'}
             </Typography>
           </Box>
 
@@ -222,6 +269,96 @@ export default function ClientHeader({
             </Box>
           </>
         )}
+
+        {/* Mandate Text - Expandable Section */}
+        <>
+          <Divider />
+          <Box>
+            <Box 
+              sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                cursor: 'pointer',
+                '&:hover': {
+                  bgcolor: 'action.hover',
+                },
+                p: 1,
+                borderRadius: 1,
+                transition: 'background-color 0.2s',
+              }}
+              onClick={() => setMandateExpanded(!mandateExpanded)}
+            >
+              <Box sx={{ flex: 1, minWidth: 0, mr: 1 }}>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  Investment Mandate & Guidelines
+                  {!mandateText && (
+                    <Typography 
+                      component="span"
+                      variant="caption" 
+                      color="text.disabled"
+                      sx={{ ml: 1 }}
+                    >
+                      (not set - click Edit to add)
+                    </Typography>
+                  )}
+                </Typography>
+                {!mandateExpanded && mandateText && (
+                  <Typography 
+                    variant="body2" 
+                    color="text.primary"
+                    sx={{ 
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {mandateText.substring(0, 150)}
+                    {mandateText.length > 150 ? '...' : ''}
+                  </Typography>
+                )}
+              </Box>
+              <IconButton
+                size="small"
+                sx={{
+                  transform: mandateExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              >
+                <ExpandMore />
+              </IconButton>
+            </Box>
+            <Collapse in={mandateExpanded}>
+              <Box 
+                sx={{ 
+                  mt: 2, 
+                  p: 2, 
+                  bgcolor: 'background.default',
+                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                {mandateText ? (
+                  <Typography 
+                    variant="body2" 
+                    sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {mandateText}
+                  </Typography>
+                ) : (
+                  <Typography 
+                    variant="body2" 
+                    color="text.disabled"
+                    sx={{ fontStyle: 'italic' }}
+                  >
+                    No investment mandate or guidelines have been set for this client. Click the Edit button above to add detailed investment guidelines, restrictions, and preferences.
+                  </Typography>
+                )}
+              </Box>
+            </Collapse>
+          </Box>
+        </>
       </Stack>
     </Paper>
   );

@@ -16,14 +16,17 @@ import {
   Select,
   MenuItem,
   Chip,
+  Snackbar,
 } from '@mui/material';
 import ClientHeader from '../components/common/ClientHeader';
+import ClientProfileEditDialog from '../components/client/ClientProfileEditDialog';
 import { PortfolioPanel } from '../components/common/PortfolioPanel';
 import { WatchlistPanel } from '../components/common/WatchlistPanel';
 import { ClientNewsPanel } from '../components/common/ClientNewsPanel';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
+import type { ClientProfile as ClientProfileType, ClientProfileUpdate } from '../types/clientProfile';
 
 interface Client {
   guid: string;
@@ -41,6 +44,7 @@ interface ClientProfile {
   horizon?: string;
   esg_constrained?: boolean;
   turnover_rate?: number;
+  mandate_text?: string;
 }
 
 interface ScoreBreakdown {
@@ -69,6 +73,12 @@ export default function Client360View() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
   const [profileScore, setProfileScore] = useState<ProfileScore | null>(null);
+
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
   
   // Get selected token safely
   const selectedToken: JwtToken | null =
@@ -78,7 +88,7 @@ export default function Client360View() {
 
   // Accept any non-empty string as a valid GUID
   const isValidGuid = (guid: string): boolean => {
-    return guid && guid.length > 0;
+    return Boolean(guid && guid.length > 0);
   };
 
   // Load clients when token changes
@@ -90,6 +100,7 @@ export default function Client360View() {
       return;
     }
     loadClients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedToken]);
 
   // Load profile when client is selected
@@ -97,6 +108,7 @@ export default function Client360View() {
     if (selectedClientGuid && selectedToken?.token) {
       loadClientProfile(selectedClientGuid);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClientGuid, selectedToken]);
 
   const loadClients = async () => {
@@ -108,14 +120,32 @@ export default function Client360View() {
     try {
       const result = await api.listClients(selectedToken.token);
       console.log('Clients loaded:', result.clients?.map((c: Client) => ({ name: c.name, guid: c.guid })));
-      setClients(result.clients || []);
       
-      // Auto-select first valid client
-      if (result.clients && result.clients.length > 0) {
-        const firstValidClient = result.clients.find((c: Client) => isValidGuid(c.guid));
-        if (firstValidClient) {
-          setSelectedClientGuid(firstValidClient.guid);
+      // Filter clients to only those the user has permission to access
+      // by testing profile access for each client
+      const allClients = result.clients || [];
+      const accessibleClients: Client[] = [];
+      
+      for (const client of allClients) {
+        if (!isValidGuid(client.guid)) {
+          continue; // Skip clients with invalid GUIDs
         }
+        
+        // Test if we can access this client's profile
+        try {
+          await api.getClientProfile(selectedToken.token, client.guid);
+          accessibleClients.push(client);
+        } catch (err) {
+          // If profile fails to load, likely a permissions issue - skip this client
+          console.log(`Skipping client ${client.name} (${client.guid}): no access`);
+        }
+      }
+      
+      setClients(accessibleClients);
+      
+      // Auto-select first accessible client
+      if (accessibleClients.length > 0) {
+        setSelectedClientGuid(accessibleClients[0].guid);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load clients');
@@ -134,12 +164,41 @@ export default function Client360View() {
     setProfileLoading(true);
 
     try {
-      const [profile, score] = await Promise.all([
-        api.getClientProfile(selectedToken.token, clientGuid),
-        api.getClientProfileScore(selectedToken.token, clientGuid),
-      ]);
-      setClientProfile(profile);
-      setProfileScore(score);
+      // Fetch profile (required)
+      const profileResponse = await api.getClientProfile(selectedToken.token, clientGuid);
+      console.log('Profile loaded:', profileResponse);
+      console.log('Profile response keys:', Object.keys(profileResponse));
+      console.log('profile.mandate_text:', profileResponse.profile?.mandate_text);
+      
+      // Flatten nested structure from backend
+      const flatProfile: ClientProfile = {
+        name: profileResponse.name,
+        client_type: profileResponse.client_type,
+        // Extract from nested 'profile' object
+        mandate_type: profileResponse.profile?.mandate_type,
+        benchmark: profileResponse.profile?.benchmark,
+        horizon: profileResponse.profile?.horizon,
+        esg_constrained: profileResponse.profile?.esg_constrained,
+        turnover_rate: profileResponse.profile?.turnover_rate,
+        mandate_text: profileResponse.profile?.mandate_text,
+        // Extract from nested 'settings' object
+        alert_frequency: profileResponse.settings?.alert_frequency,
+        impact_threshold: profileResponse.settings?.impact_threshold,
+      };
+      
+      console.log('Flattened profile:', flatProfile);
+      console.log('flatProfile.mandate_text:', flatProfile.mandate_text);
+      setClientProfile(flatProfile);
+
+      // Fetch score (optional - may fail if backend tool doesn't exist yet)
+      try {
+        const score = await api.getClientProfileScore(selectedToken.token, clientGuid);
+        console.log('Profile score loaded:', score);
+        setProfileScore(score);
+      } catch (scoreErr) {
+        console.warn('Failed to load profile score (tool may not exist yet):', scoreErr);
+        setProfileScore(null);
+      }
     } catch (err) {
       console.error('Failed to load profile:', err);
       setClientProfile(null);
@@ -147,6 +206,40 @@ export default function Client360View() {
     } finally {
       setProfileLoading(false);
     }
+  };
+
+  // Handle edit dialog open
+  const handleEditOpen = () => {
+    setEditDialogOpen(true);
+  };
+
+  // Handle edit dialog close
+  const handleEditClose = () => {
+    setEditDialogOpen(false);
+  };
+
+  // Handle save from edit dialog
+  const handleSaveProfile = async (updates: ClientProfileUpdate) => {
+    if (!selectedClientGuid || !selectedToken?.token) {
+      throw new Error('No client or token selected');
+    }
+
+    console.log('Saving profile updates:', updates);
+    const result = await api.updateClientProfile(selectedToken.token, selectedClientGuid, updates);
+    console.log('Profile update result:', result);
+    
+    // Refresh profile and score after successful update
+    await loadClientProfile(selectedClientGuid);
+    
+    // Show success message
+    setSnackbarMessage('Profile updated successfully');
+    setSnackbarSeverity('success');
+    setSnackbarOpen(true);
+  };
+
+  // Handle snackbar close
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
   };
 
   if (loading) {
@@ -174,9 +267,6 @@ export default function Client360View() {
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" gutterBottom>
         Client 360 View
-      </Typography>
-      <Typography variant="body2" color="text.secondary" paragraph>
-        Stages 5.1-5.2: Client List, Profile Header
       </Typography>
       
       {/* Token Selection */}
@@ -276,9 +366,12 @@ export default function Client360View() {
                     esgConstrained={clientProfile.esg_constrained}
                     impactThreshold={clientProfile.impact_threshold}
                     turnoverRate={clientProfile.turnover_rate}
+                    mandateText={clientProfile.mandate_text}
                     completenessScore={profileScore?.score}
                     scoreBreakdown={profileScore?.breakdown}
                     missingFields={profileScore?.missing_fields}
+                    editable={true}
+                    onEdit={handleEditOpen}
                   />
 
                   {/* Portfolio & News Side-by-Side */}
@@ -287,18 +380,18 @@ export default function Client360View() {
                     <Box sx={{ flex: 2 }}>
                       {/* Stage 5.3: Portfolio & Holdings */}
                       <Box sx={{ mb: 3 }}>
-                        {selectedToken && <PortfolioPanel clientGuid={selectedClientGuid} authToken={selectedToken.token} />}
+                        {selectedToken && selectedClientGuid && <PortfolioPanel clientGuid={selectedClientGuid} authToken={selectedToken.token} />}
                       </Box>
 
                       {/* Stage 5.4: Watchlist */}
                       <Box sx={{ mb: 3 }}>
-                        {selectedToken && <WatchlistPanel clientGuid={selectedClientGuid} authToken={selectedToken.token} />}
+                        {selectedToken && selectedClientGuid && <WatchlistPanel clientGuid={selectedClientGuid} authToken={selectedToken.token} />}
                       </Box>
                     </Box>
 
                     {/* Right: News Feed */}
                     <Box sx={{ flex: 1, minWidth: 400 }}>
-                      {selectedToken && selectedClient && (
+                      {selectedToken && selectedClient && selectedClientGuid && (
                         <ClientNewsPanel 
                           clientGuid={selectedClientGuid} 
                           clientName={selectedClient.name}
@@ -320,6 +413,29 @@ export default function Client360View() {
           )}
         </Box>
       </Box>
+
+      {/* Edit Profile Dialog */}
+      {clientProfile && selectedClient && (
+        <ClientProfileEditDialog
+          open={editDialogOpen}
+          onClose={handleEditClose}
+          onSave={handleSaveProfile}
+          profile={clientProfile as ClientProfileType}
+          clientName={selectedClient.name}
+        />
+      )}
+
+      {/* Success/Error Snackbar */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={4000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

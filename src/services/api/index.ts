@@ -530,6 +530,49 @@ export const api = {
     }
   },
 
+  // Update client profile (partial update - only send changed fields)
+  updateClientProfile: async (
+    authToken: string,
+    clientGuid: string,
+    updates: {
+      mandate_type?: string;
+      benchmark?: string;
+      horizon?: string;
+      esg_constrained?: boolean;
+      alert_frequency?: string;
+      impact_threshold?: number;
+    }
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('update_client_profile', {
+      client_guid: clientGuid,
+      ...updates,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from update_client_profile');
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        // Include error_code if available for better error handling
+        const error: any = new Error(parsed.message || 'Failed to update profile');
+        error.code = parsed.error_code;
+        throw error;
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to parse update profile response');
+    }
+  },
+
   // Get client news feed using get_top_client_news
   getClientFeed: async (
     authToken: string,
