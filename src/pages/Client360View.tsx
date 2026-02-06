@@ -330,7 +330,22 @@ export default function Client360View() {
 
         {/* Main Content: Client 360 Dashboard */}
         <Box sx={{ flex: 1 }}>
-          {!selectedClient && (
+          {!selectedClient && !loading && !selectedToken && (
+            <Alert severity="warning">
+              <AlertTitle>No Token Selected</AlertTitle>
+              Select an authentication token from the dropdown above to load clients.
+            </Alert>
+          )}
+
+          {!selectedClient && !loading && selectedToken && clients.length === 0 && (
+            <Alert severity="info">
+              <AlertTitle>No Clients Available</AlertTitle>
+              No clients were found for the selected token ({selectedToken.name}). 
+              This may mean no clients have been created yet, or this token does not have access to any clients.
+            </Alert>
+          )}
+
+          {!selectedClient && !loading && selectedToken && clients.length > 0 && (
             <Alert severity="info">
               <AlertTitle>No Client Selected</AlertTitle>
               Select a client from the list to view their 360 profile.
@@ -367,6 +382,7 @@ export default function Client360View() {
                     impactThreshold={clientProfile.impact_threshold}
                     turnoverRate={clientProfile.turnover_rate}
                     mandateText={clientProfile.mandate_text}
+                    restrictions={clientProfile.restrictions}
                     completenessScore={profileScore?.score}
                     scoreBreakdown={profileScore?.breakdown}
                     missingFields={profileScore?.missing_fields}
@@ -385,7 +401,13 @@ export default function Client360View() {
 
                       {/* Stage 5.4: Watchlist */}
                       <Box sx={{ mb: 3 }}>
-                        {selectedToken && selectedClientGuid && <WatchlistPanel clientGuid={selectedClientGuid} authToken={selectedToken.token} />}
+                        {selectedToken && selectedClientGuid && (
+                          <WatchlistPanel 
+                            clientGuid={selectedClientGuid} 
+                            authToken={selectedToken.token}
+                            defaultImpactThreshold={clientProfile?.impact_threshold}
+                          />
+                        )}
                       </Box>
                     </Box>
 
@@ -395,7 +417,9 @@ export default function Client360View() {
                         <ClientNewsPanel 
                           clientGuid={selectedClientGuid} 
                           clientName={selectedClient.name}
-                          authToken={selectedToken.token} 
+                          authToken={selectedToken.token}
+                          impactThreshold={clientProfile?.impact_threshold}
+                          restrictions={clientProfile?.restrictions}
                         />
                       )}
                     </Box>

@@ -20,6 +20,8 @@ import {
   CircularProgress,
   ToggleButtonGroup,
   ToggleButton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   MANDATE_TYPES,
@@ -35,6 +37,8 @@ import {
   type Horizon,
   type AlertFrequency,
 } from '../../types/clientProfile';
+import type { ClientRestrictions } from '../../types/restrictions';
+import RestrictionsEditor from './RestrictionsEditor';
 
 interface ClientProfileEditDialogProps {
   open: boolean;
@@ -61,8 +65,10 @@ export default function ClientProfileEditDialog({
   );
   const [impactThreshold, setImpactThreshold] = useState(profile.impact_threshold ?? 50);
   const [mandateText, setMandateText] = useState(profile.mandate_text || '');
+  const [restrictions, setRestrictions] = useState<ClientRestrictions>(profile.restrictions || {});
 
   // UI state
+  const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -76,6 +82,7 @@ export default function ClientProfileEditDialog({
     alert_frequency: profile.alert_frequency || '',
     impact_threshold: profile.impact_threshold ?? 50,
     mandate_text: profile.mandate_text || '',
+    restrictions: profile.restrictions || {},
   });
 
   // Reset form when dialog opens/closes or profile changes
@@ -88,6 +95,8 @@ export default function ClientProfileEditDialog({
       setAlertFrequency(profile.alert_frequency || '');
       setImpactThreshold(profile.impact_threshold ?? 50);
       setMandateText(profile.mandate_text || '');
+      setRestrictions(profile.restrictions || {});
+      setActiveTab(0);
       setError(null);
       setValidationErrors({});
     }
@@ -117,6 +126,9 @@ export default function ClientProfileEditDialog({
     }
     if (mandateText !== originalValues.mandate_text) {
       changes.mandate_text = mandateText || undefined;
+    }
+    if (JSON.stringify(restrictions) !== JSON.stringify(originalValues.restrictions)) {
+      changes.restrictions = restrictions;
     }
 
     return changes;
@@ -228,6 +240,15 @@ export default function ClientProfileEditDialog({
         </Typography>
       </DialogTitle>
 
+      <Tabs
+        value={activeTab}
+        onChange={(_, newValue) => setActiveTab(newValue)}
+        sx={{ borderBottom: 1, borderColor: 'divider', px: 3 }}
+      >
+        <Tab label="Profile" />
+        <Tab label="Restrictions" />
+      </Tabs>
+
       <DialogContent dividers>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -235,6 +256,8 @@ export default function ClientProfileEditDialog({
           </Alert>
         )}
 
+        {/* Profile Tab */}
+        {activeTab === 0 && (
         <Grid container spacing={3}>
           {/* Mandate Type */}
           <Grid size={{ xs: 12, md: 6 }}>
@@ -403,6 +426,22 @@ export default function ClientProfileEditDialog({
             />
           </Grid>
         </Grid>
+        )}
+
+        {/* Restrictions Tab */}
+        {activeTab === 1 && (
+          <Box sx={{ py: 2 }}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Restrictions are stored as full replacement. All fields below represent the complete state.
+              Changes here will overwrite any existing restrictions.
+            </Alert>
+            <RestrictionsEditor
+              value={restrictions}
+              onChange={setRestrictions}
+              disabled={loading}
+            />
+          </Box>
+        )}
       </DialogContent>
 
       <DialogActions>

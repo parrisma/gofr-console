@@ -10,8 +10,16 @@ import {
   Box,
   Chip,
   Divider,
+  Link,
+  Button,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
+import { FilterList, FilterListOff } from '@mui/icons-material';
 import { api } from '../../services/api';
+import DocumentViewDialog from './DocumentViewDialog';
+import { getIndustryLabel } from '../../types/restrictions';
+import type { ClientRestrictions } from '../../types/restrictions';
 
 interface NewsArticle {
   document_guid?: string;
@@ -30,12 +38,36 @@ interface ClientNewsPanelProps {
   clientGuid: string;
   clientName: string;
   authToken: string;
+  impactThreshold?: number;
+  restrictions?: ClientRestrictions;
 }
 
-export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, clientName, authToken }) => {
+export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ 
+  clientGuid, 
+  clientName, 
+  authToken, 
+  impactThreshold,
+  restrictions,
+}) => {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDocGuid, setSelectedDocGuid] = useState<string | null>(null);
+  const [selectedArticleMeta, setSelectedArticleMeta] = useState<NewsArticle | null>(null);
+  const [docDialogOpen, setDocDialogOpen] = useState(false);
+  const [showAllArticles, setShowAllArticles] = useState(false);
+
+  const handleDocumentClick = (docGuid: string, article: NewsArticle) => {
+    setSelectedDocGuid(docGuid);
+    setSelectedArticleMeta(article);
+    setDocDialogOpen(true);
+  };
+
+  const handleDocDialogClose = () => {
+    setDocDialogOpen(false);
+    setSelectedDocGuid(null);
+    setSelectedArticleMeta(null);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +82,9 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
       setLoading(true);
       setError(null);
       try {
-        const response = await api.getClientFeed(authToken, clientGuid, 10, 0);
+        // Apply threshold filter unless "show all" is toggled
+        const effectiveThreshold = showAllArticles ? 0 : (impactThreshold ?? 0);
+        const response = await api.getClientFeed(authToken, clientGuid, 10, effectiveThreshold);
         if (cancelled) {
           console.log(`News fetch for ${clientName} cancelled (stale)`);
           return;
@@ -78,7 +112,7 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
     return () => {
       cancelled = true;
     };
-  }, [clientGuid, clientName, authToken]);
+  }, [clientGuid, clientName, authToken, impactThreshold, showAllArticles]);
 
   const getTierColor = (tier: string): 'error' | 'warning' | 'info' | 'default' => {
     switch (tier) {
@@ -150,6 +184,77 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
         Most relevant articles for this client based on fund type, holdings, and watchlist
       </Typography>
 
+      {/* Filter Transparency Alert */}
+      {!showAllArticles && (impactThreshold !== undefined && impactThreshold > 0 || restrictions) && (
+        <Alert 
+          severity="info" 
+          icon={<FilterList />}
+          sx={{ mb: 2 }}
+          action={
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showAllArticles}
+                  onChange={(e) => setShowAllArticles(e.target.checked)}
+                  size="small"
+                />
+              }
+              label="Show All"
+              labelPlacement="start"
+              sx={{ mr: 0 }}
+            />
+          }
+        >
+          <Typography variant="body2" sx={{ fontWeight: 'medium', mb: 0.5 }}>
+            Active Filters
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {impactThreshold !== undefined && impactThreshold > 0 && (
+              <Typography variant="caption">
+                • Impact threshold: {impactThreshold} (hiding articles below this score)
+              </Typography>
+            )}
+            {restrictions?.ethical_sector?.excluded_industries && restrictions.ethical_sector.excluded_industries.length > 0 && (
+              <Typography variant="caption">
+                • Excluded industries: {restrictions.ethical_sector.excluded_industries.map(getIndustryLabel).join(', ')}
+              </Typography>
+            )}
+            {restrictions?.ethical_sector?.faith_based && (
+              <Typography variant="caption">
+                • Faith-based compliance: {restrictions.ethical_sector.faith_based}
+              </Typography>
+            )}
+            {restrictions?.impact_sustainability?.impact_themes && restrictions.impact_sustainability.impact_themes.length > 0 && (
+              <Typography variant="caption" sx={{ color: 'success.main' }}>
+                • Prioritizing {restrictions.impact_sustainability.impact_themes.length} impact theme(s)
+              </Typography>
+            )}
+          </Box>
+        </Alert>
+      )}
+
+      {/* Show All Mode Indicator */}
+      {showAllArticles && (
+        <Alert 
+          severity="warning" 
+          icon={<FilterListOff />}
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              size="small"
+              onClick={() => setShowAllArticles(false)}
+              sx={{ textTransform: 'none' }}
+            >
+              Restore Filters
+            </Button>
+          }
+        >
+          <Typography variant="body2">
+            Showing all articles - filters temporarily disabled
+          </Typography>
+        </Alert>
+      )}
+
       {error && (
         <Alert severity="error" sx={{ mt: 2 }}>
           {error}
@@ -164,68 +269,108 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({ clientGuid, cl
 
       {!error && articles.length > 0 && (
         <List sx={{ pt: 0, maxHeight: 400, overflow: 'auto' }}>
-          {articles.map((article, index) => (
-            <React.Fragment key={article.document_guid || article.guid || index}>
-              {index > 0 && <Divider />}
-              <ListItem alignItems="flex-start" sx={{ px: 0, flexDirection: 'column', alignItems: 'stretch' }}>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                      <Chip
-                        label={article.impact_tier}
-                        color={getTierColor(article.impact_tier)}
-                        size="small"
-                        sx={{ fontWeight: 'bold' }}
-                      />
-                      <Chip
-                        label={article.impact_score}
-                        color={getTierColor(article.impact_tier)}
-                        size="small"
-                        variant="outlined"
-                      />
-                      {article.affected_instruments && article.affected_instruments.length > 0 && (
+          {articles.map((article, index) => {
+            const docGuid = article.document_guid || article.guid;
+            return (
+              <React.Fragment key={docGuid || index}>
+                {index > 0 && <Divider />}
+                <ListItem alignItems="flex-start" sx={{ px: 0, flexDirection: 'column', alignItems: 'stretch' }}>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                         <Chip
-                          label={article.affected_instruments.join(', ')}
+                          label={article.impact_tier}
+                          color={getTierColor(article.impact_tier)}
+                          size="small"
+                          sx={{ fontWeight: 'bold' }}
+                        />
+                        <Chip
+                          label={article.impact_score}
+                          color={getTierColor(article.impact_tier)}
                           size="small"
                           variant="outlined"
-                          color="primary"
                         />
-                      )}
-                      <Typography variant="caption" color="text.secondary" component="span">
-                        {formatDate(article.created_at)}
-                      </Typography>
+                        {article.affected_instruments && article.affected_instruments.length > 0 && (
+                          <Chip
+                            label={article.affected_instruments.join(', ')}
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                          />
+                        )}
+                        <Typography variant="caption" color="text.secondary" component="span">
+                          {formatDate(article.created_at)}
+                        </Typography>
+                      </Box>
+                    }
+                    secondary={
+                      docGuid ? (
+                        <Link
+                          component="button"
+                          variant="body2"
+                          onClick={() => handleDocumentClick(docGuid, article)}
+                          sx={{
+                            fontWeight: 'medium',
+                            textAlign: 'left',
+                            textDecoration: 'none',
+                            cursor: 'pointer',
+                            '&:hover': { textDecoration: 'underline' },
+                          }}
+                        >
+                          {article.title}
+                        </Link>
+                      ) : (
+                        article.title
+                      )
+                    }
+                    secondaryTypographyProps={{ component: 'div', mb: 0.5 }}
+                  />
+                  {article.why_it_matters && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontStyle: 'italic' }}>
+                      {article.why_it_matters}
+                    </Typography>
+                  )}
+                  {article.reasons && article.reasons.length > 0 && (
+                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.5 }}>
+                      {article.reasons.map((reason, i) => (
+                        <Chip
+                          key={i}
+                          label={reason.replace(/_/g, ' ')}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: '0.7rem' }}
+                        />
+                      ))}
                     </Box>
-                  }
-                  secondary={article.title}
-                  secondaryTypographyProps={{ fontWeight: 'medium', mb: 0.5 }}
-                />
-                {article.why_it_matters && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontStyle: 'italic' }}>
-                    {article.why_it_matters}
-                  </Typography>
-                )}
-                {article.reasons && article.reasons.length > 0 && (
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.5 }}>
-                    {article.reasons.map((reason, i) => (
-                      <Chip
-                        key={i}
-                        label={reason.replace(/_/g, ' ')}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: '0.7rem' }}
-                      />
-                    ))}
-                  </Box>
-                )}
-                {article.source_name && (
-                  <Typography variant="caption" color="text.secondary">
-                    Source: {article.source_name}
-                  </Typography>
-                )}
-              </ListItem>
-            </React.Fragment>
-          ))}
+                  )}
+                  {article.source_name && (
+                    <Typography variant="caption" color="text.secondary">
+                      Source: {article.source_name}
+                    </Typography>
+                  )}
+                </ListItem>
+              </React.Fragment>
+            );
+          })}
         </List>
+      )}
+
+      {/* Document View Dialog */}
+      {selectedDocGuid && (
+        <DocumentViewDialog
+          open={docDialogOpen}
+          onClose={handleDocDialogClose}
+          documentGuid={selectedDocGuid}
+          authToken={authToken}
+          articleMetadata={selectedArticleMeta ? {
+            impact_score: selectedArticleMeta.impact_score,
+            impact_tier: selectedArticleMeta.impact_tier,
+            source_name: selectedArticleMeta.source_name,
+            affected_instruments: selectedArticleMeta.affected_instruments,
+            reasons: selectedArticleMeta.reasons,
+            why_it_matters: selectedArticleMeta.why_it_matters,
+          } : undefined}
+        />
       )}
     </Paper>
   );

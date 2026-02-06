@@ -2,6 +2,8 @@
  * Shared types and constants for Client Profile management
  */
 
+import type { ClientRestrictions } from './restrictions';
+
 // Client profile attribute types
 export type MandateType =
   | 'equity_long_short'
@@ -27,6 +29,7 @@ export interface ClientProfile {
   esg_constrained?: boolean;
   turnover_rate?: number;
   mandate_text?: string;
+  restrictions?: ClientRestrictions;
 }
 
 // Partial update payload (only changed fields)
@@ -38,6 +41,7 @@ export interface ClientProfileUpdate {
   alert_frequency?: AlertFrequency;
   impact_threshold?: number;
   mandate_text?: string;
+  restrictions?: ClientRestrictions;
 }
 
 // Validation constants

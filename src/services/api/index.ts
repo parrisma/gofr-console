@@ -2,6 +2,7 @@
 // MCP Streamable HTTP client for GOFR services
 
 import { configStore } from '../../stores/configStore';
+import type { ClientRestrictions } from '../../types/restrictions';
 
 // Dynamic base URL based on config
 function getBaseUrl(serviceName: string): string {
@@ -541,6 +542,8 @@ export const api = {
       esg_constrained?: boolean;
       alert_frequency?: string;
       impact_threshold?: number;
+      mandate_text?: string;
+      restrictions?: ClientRestrictions;
     }
   ) => {
     const client = getMcpClient('gofr-iq');
@@ -573,12 +576,82 @@ export const api = {
     }
   },
 
+  // Create a new client
+  createClient: async (
+    authToken: string,
+    clientData: {
+      name: string;
+      client_type: string;
+      alert_frequency?: string;
+      impact_threshold?: number;
+      mandate_type?: string;
+      benchmark?: string;
+      horizon?: string;
+      esg_constrained?: boolean;
+      mandate_text?: string;
+      restrictions?: ClientRestrictions;
+    }
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('create_client', {
+      ...clientData,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from create_client');
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to create client');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to parse create client response');
+    }
+  },
+
+  // Get full document by GUID
+  getDocument: async (authToken: string, documentGuid: string) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('get_document', {
+      guid: documentGuid,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from get_document');
+    }
+
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to get document');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) {
+        throw err;
+      }
+      throw new Error('Failed to parse document response');
+    }
+  },
+
   // Get client news feed using get_top_client_news
   getClientFeed: async (
     authToken: string,
     clientGuid: string,
     limit: number = 10,
-    minTrust: number = 0
+    minImpactScore: number = 0
   ) => {
     const client = getMcpClient('gofr-iq');
     
@@ -586,6 +659,7 @@ export const api = {
       client_guid: clientGuid,
       limit: Math.min(limit, 10), // Max 10 per tool spec
       time_window_hours: 24,
+      min_impact_score: minImpactScore,
       include_portfolio: true,
       include_watchlist: true,
       include_lateral_graph: true,
@@ -608,6 +682,77 @@ export const api = {
         throw err;
       }
       throw new Error('Failed to parse client news response');
+    }
+  },
+
+  // Add to portfolio
+  addToPortfolio: async (
+    authToken: string,
+    clientGuid: string,
+    ticker: string,
+    weight: number,
+    shares?: number,
+    avgCost?: number
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const params: Record<string, unknown> = {
+      client_guid: clientGuid,
+      ticker,
+      weight,
+      auth_tokens: [authToken],
+    };
+    
+    if (shares !== undefined) params.shares = shares;
+    if (avgCost !== undefined) params.avg_cost = avgCost;
+    
+    const result = await client.callTool<HealthCheckResult>('add_to_portfolio', params);
+    
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from add_to_portfolio');
+    }
+    
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to add to portfolio');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) throw err;
+      throw new Error('Failed to parse add_to_portfolio response');
+    }
+  },
+
+  // Remove from portfolio
+  removeFromPortfolio: async (
+    authToken: string,
+    clientGuid: string,
+    ticker: string
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('remove_from_portfolio', {
+      client_guid: clientGuid,
+      ticker,
+      auth_tokens: [authToken],
+    });
+    
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from remove_from_portfolio');
+    }
+    
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to remove from portfolio');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) throw err;
+      throw new Error('Failed to parse remove_from_portfolio response');
     }
   },
 
@@ -648,6 +793,73 @@ export const api = {
         throw err;
       }
       throw new Error('Failed to parse portfolio holdings response');
+    }
+  },
+
+  // Add to watchlist
+  addToWatchlist: async (
+    authToken: string,
+    clientGuid: string,
+    ticker: string,
+    alertThreshold?: number
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const params: Record<string, unknown> = {
+      client_guid: clientGuid,
+      ticker,
+      auth_tokens: [authToken],
+    };
+    
+    if (alertThreshold !== undefined) params.alert_threshold = alertThreshold;
+    
+    const result = await client.callTool<HealthCheckResult>('add_to_watchlist', params);
+    
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from add_to_watchlist');
+    }
+    
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to add to watchlist');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) throw err;
+      throw new Error('Failed to parse add_to_watchlist response');
+    }
+  },
+
+  // Remove from watchlist
+  removeFromWatchlist: async (
+    authToken: string,
+    clientGuid: string,
+    ticker: string
+  ) => {
+    const client = getMcpClient('gofr-iq');
+    
+    const result = await client.callTool<HealthCheckResult>('remove_from_watchlist', {
+      client_guid: clientGuid,
+      ticker,
+      auth_tokens: [authToken],
+    });
+    
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
+    if (!textContent) {
+      throw new Error('No response from remove_from_watchlist');
+    }
+    
+    try {
+      const parsed = JSON.parse(textContent);
+      if (parsed.status === 'error') {
+        throw new Error(parsed.message || 'Failed to remove from watchlist');
+      }
+      return parsed.data || parsed;
+    } catch (err) {
+      if (err instanceof Error) throw err;
+      throw new Error('Failed to parse remove_from_watchlist response');
     }
   },
 

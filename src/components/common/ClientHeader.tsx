@@ -2,6 +2,8 @@ import { Box, Paper, Typography, Chip, Stack, Divider, LinearProgress, Tooltip, 
 import { Warning, CheckCircle, ErrorOutline, Edit, ExpandMore } from '@mui/icons-material';
 import { useState } from 'react';
 import { MANDATE_TYPES, HORIZONS, ALERT_FREQUENCIES } from '../../types/clientProfile';
+import type { ClientRestrictions } from '../../types/restrictions';
+import RestrictionsChip from '../client/RestrictionsChip';
 
 interface ScoreBreakdown {
   holdings: { score: number; weight: number };
@@ -21,6 +23,7 @@ interface ClientHeaderProps {
   impactThreshold?: number;
   turnoverRate?: number;
   mandateText?: string;
+  restrictions?: ClientRestrictions;
   completenessScore?: number;
   scoreBreakdown?: ScoreBreakdown;
   missingFields?: string[];
@@ -39,6 +42,7 @@ export default function ClientHeader({
   impactThreshold,
   turnoverRate,
   mandateText,
+  restrictions,
   completenessScore,
   scoreBreakdown,
   missingFields,
@@ -115,7 +119,16 @@ export default function ClientHeader({
                   </IconButton>
                 )}
               </Box>
-              <Chip label={clientType} color="primary" sx={{ mt: 1 }} />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                <Chip label={clientType} color="primary" />
+                {restrictions && (
+                  <RestrictionsChip 
+                    restrictions={restrictions} 
+                    onClick={onEdit}
+                    size="small"
+                  />
+                )}
+              </Box>
             </Box>
           </Box>
           
@@ -252,8 +265,8 @@ export default function ClientHeader({
           )}
         </Stack>
 
-        {/* Constraints & Flags */}
-        {esgConstrained && (
+        {/* Legacy ESG Constrained flag (shown if esg_constrained but no detailed restrictions) */}
+        {esgConstrained && !restrictions?.ethical_sector && !restrictions?.impact_sustainability && (
           <>
             <Divider />
             <Box>
@@ -264,7 +277,7 @@ export default function ClientHeader({
                 sx={{ mr: 1 }}
               />
               <Typography variant="caption" color="text.secondary">
-                This client has ESG investment restrictions
+                This client has ESG investment restrictions (legacy flag)
               </Typography>
             </Box>
           </>

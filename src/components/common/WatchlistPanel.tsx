@@ -13,9 +13,19 @@ import {
   Alert,
   IconButton,
   Tooltip,
+  Button,
+  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { api } from '../../services/api';
+import WatchlistEditDialog from '../watchlist/WatchlistEditDialog';
 
 interface WatchlistItem {
   ticker: string;
@@ -31,7 +41,7 @@ interface WatchlistItem {
 interface WatchlistPanelProps {
   clientGuid: string;
   authToken: string;
-  onEditItem?: (item: WatchlistItem) => void;
+  defaultImpactThreshold?: number;
 }
 
 type OrderDirection = 'asc' | 'desc';
@@ -39,13 +49,23 @@ type OrderDirection = 'asc' | 'desc';
 export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({ 
   clientGuid,
   authToken,
-  onEditItem,
+  defaultImpactThreshold = 50,
 }) => {
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orderBy, setOrderBy] = useState<keyof WatchlistItem>('ticker');
   const [order, setOrder] = useState<OrderDirection>('asc');
+  
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
+  const [selectedItem, setSelectedItem] = useState<WatchlistItem | null>(null);
+  
+  // Delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<WatchlistItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +106,63 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
       cancelled = true;
     };
   }, [clientGuid, authToken]);
+
+  const loadWatchlist = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.getClientWatchlist(authToken, clientGuid);
+      const items = response.items || response.watchlist;
+      if (items && Array.isArray(items)) {
+        setWatchlist(items);
+      } else {
+        setWatchlist([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load watchlist');
+      setWatchlist([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddClick = () => {
+    setEditMode('add');
+    setSelectedItem(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditClick = (item: WatchlistItem) => {
+    setEditMode('edit');
+    setSelectedItem(item);
+    setEditDialogOpen(true);
+  };
+
+  const handleDeleteClick = (item: WatchlistItem) => {
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.removeFromWatchlist(authToken, clientGuid, itemToDelete.ticker);
+      await loadWatchlist();
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete watchlist item');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditSuccess = async () => {
+    await loadWatchlist();
+  };
 
   const handleSort = (property: keyof WatchlistItem) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -179,87 +256,154 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Watchlist
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {watchlist.length} item{watchlist.length !== 1 ? 's' : ''} monitored
-      </Typography>
-      
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'ticker'}
-                  direction={orderBy === 'ticker' ? order : 'asc'}
-                  onClick={() => handleSort('ticker')}
-                >
-                  Ticker
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'instrument_name'}
-                  direction={orderBy === 'instrument_name' ? order : 'asc'}
-                  onClick={() => handleSort('instrument_name')}
-                >
-                  Name
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">
-                <TableSortLabel
-                  active={orderBy === 'alert_threshold'}
-                  direction={orderBy === 'alert_threshold' ? order : 'asc'}
-                  onClick={() => handleSort('alert_threshold')}
-                >
-                  Alert Threshold
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="center">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sortedWatchlist.map((item, index) => {
-              const breached = isThresholdBreached(item);
-              return (
-                <TableRow key={index} hover>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6">
+          Watchlist
+        </Typography>
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={handleAddClick}
+          disabled={loading}
+        >
+          Add Item
+        </Button>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {watchlist.length === 0 && !loading ? (
+        <Alert severity="info">No items in watchlist</Alert>
+      ) : (
+        <>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {watchlist.length} item{watchlist.length !== 1 ? 's' : ''} monitored
+          </Typography>
+          
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
                   <TableCell>
-                    <Typography variant="body2" fontWeight="medium">
-                      {item.ticker}
-                    </Typography>
+                    <TableSortLabel
+                      active={orderBy === 'ticker'}
+                      direction={orderBy === 'ticker' ? order : 'asc'}
+                      onClick={() => handleSort('ticker')}
+                    >
+                      Ticker
+                    </TableSortLabel>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2">
-                      {item.instrument_name || item.name || '-'}
-                    </Typography>
+                    <TableSortLabel
+                      active={orderBy === 'instrument_name'}
+                      direction={orderBy === 'instrument_name' ? order : 'asc'}
+                      onClick={() => handleSort('instrument_name')}
+                    >
+                      Name
+                    </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography variant="body2">
-                      {item.alert_threshold !== null && item.alert_threshold !== undefined
-                        ? item.alert_threshold
-                        : '-'}
-                    </Typography>
+                    <TableSortLabel
+                      active={orderBy === 'alert_threshold'}
+                      direction={orderBy === 'alert_threshold' ? order : 'asc'}
+                      onClick={() => handleSort('alert_threshold')}
+                    >
+                      Alert Threshold
+                    </TableSortLabel>
                   </TableCell>
-                  <TableCell align="center">
-                    {onEditItem && (
-                      <Tooltip title="Edit thresholds">
-                        <IconButton 
-                          size="small" 
-                          onClick={() => onEditItem(item)}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </TableCell>
+                  <TableCell align="center">Actions</TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              </TableHead>
+              <TableBody>
+                {sortedWatchlist.map((item, index) => {
+                  const breached = isThresholdBreached(item);
+                  return (
+                    <TableRow key={index} hover>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight="medium">
+                          {item.ticker}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {item.instrument_name || item.name || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography variant="body2">
+                          {item.alert_threshold !== null && item.alert_threshold !== undefined
+                            ? item.alert_threshold
+                            : '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Tooltip title="Edit">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEditClick(item)}
+                            disabled={loading}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDeleteClick(item)}
+                            disabled={loading}
+                            color="error"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+
+      <WatchlistEditDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        onSuccess={handleEditSuccess}
+        item={selectedItem}
+        clientGuid={clientGuid}
+        authToken={authToken}
+        mode={editMode}
+        defaultImpactThreshold={defaultImpactThreshold}
+      />
+
+      <Dialog open={deleteDialogOpen} onClose={() => !deleting && setDeleteDialogOpen(false)}>
+        <DialogTitle>Remove from Watchlist?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to remove <strong>{itemToDelete?.ticker}</strong> from the watchlist?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };

@@ -18,9 +18,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <Box sx={{ display: 'flex' }}>
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar>
-          <Typography variant="h6" noWrap component="div">
-            GOFR Console
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="GOFR"
+              sx={{ height: 28, width: 28, objectFit: 'contain' }}
+            />
+            <Typography variant="h6" noWrap component="div">
+              GOFR Console
+            </Typography>
+          </Box>
         </Toolbar>
       </AppBar>
       
@@ -37,6 +45,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       >
         <Toolbar />
         <Box sx={{ overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2 }}>
+          <IconButton
+            onClick={() => navigate('/')}
+            aria-label="Go to home"
+            sx={{ mb: 2 }}
+          >
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="GOFR"
+              sx={{ height: 32, width: 32, objectFit: 'contain' }}
+            />
+          </IconButton>
           {navItems.map((item) => (
             <IconButton
               key={item.path}

@@ -26,6 +26,17 @@ export default function ServiceShell({ children, serviceName, serviceRoute }: Se
     <Box sx={{ display: 'flex' }}>
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="GOFR"
+              sx={{ height: 28, width: 28, objectFit: 'contain' }}
+            />
+            <Typography variant="h6" noWrap component="div">
+              GOFR Console
+            </Typography>
+          </Box>
           <IconButton
             color="inherit"
             edge="start"
@@ -60,6 +71,18 @@ export default function ServiceShell({ children, serviceName, serviceRoute }: Se
       >
         <Toolbar />
         <Box sx={{ overflow: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 2 }}>
+          <IconButton
+            onClick={() => navigate('/')}
+            aria-label="Go to home"
+            sx={{ mb: 2 }}
+          >
+            <Box
+              component="img"
+              src="/logo.png"
+              alt="GOFR"
+              sx={{ height: 32, width: 32, objectFit: 'contain' }}
+            />
+          </IconButton>
           {navItems.map((item) => (
             <IconButton
               key={item.path}

@@ -11,8 +11,21 @@ import {
   TableSortLabel,
   Skeleton,
   Alert,
+  IconButton,
+  Tooltip,
+  Button,
+  Box,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { api } from '../../services/api';
+import PortfolioEditDialog from '../portfolio/PortfolioEditDialog';
 
 interface Holding {
   ticker: string;
@@ -37,6 +50,16 @@ export const PortfolioPanel: React.FC<PortfolioPanelProps> = ({ clientGuid, auth
   const [error, setError] = useState<string | null>(null);
   const [orderBy, setOrderBy] = useState<keyof Holding>('weight');
   const [order, setOrder] = useState<OrderDirection>('desc');
+  
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editMode, setEditMode] = useState<'add' | 'edit'>('add');
+  const [selectedHolding, setSelectedHolding] = useState<Holding | null>(null);
+  
+  // Delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [holdingToDelete, setHoldingToDelete] = useState<Holding | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,6 +99,62 @@ export const PortfolioPanel: React.FC<PortfolioPanelProps> = ({ clientGuid, auth
       cancelled = true;
     };
   }, [clientGuid, authToken]);
+
+  const loadHoldings = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.getPortfolioHoldings(authToken, clientGuid);
+      if (response.holdings && Array.isArray(response.holdings)) {
+        setHoldings(response.holdings);
+      } else {
+        setHoldings([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load portfolio holdings');
+      setHoldings([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddClick = () => {
+    setEditMode('add');
+    setSelectedHolding(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleEditClick = (holding: Holding) => {
+    setEditMode('edit');
+    setSelectedHolding(holding);
+    setEditDialogOpen(true);
+  };
+
+  const handleDeleteClick = (holding: Holding) => {
+    setHoldingToDelete(holding);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!holdingToDelete) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await api.removeFromPortfolio(authToken, clientGuid, holdingToDelete.ticker);
+      await loadHoldings();
+      setDeleteDialogOpen(false);
+      setHoldingToDelete(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete holding');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleEditSuccess = async () => {
+    await loadHoldings();
+  };
 
   const handleSort = (property: keyof Holding) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -156,101 +235,180 @@ export const PortfolioPanel: React.FC<PortfolioPanelProps> = ({ clientGuid, auth
 
   return (
     <Paper sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom>
-        Portfolio Holdings
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {holdings.length} position{holdings.length !== 1 ? 's' : ''}
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6">
+          Portfolio Holdings
+        </Typography>
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<AddIcon />}
+          onClick={handleAddClick}
+          disabled={loading}
+        >
+          Add Position
+        </Button>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {holdings.length === 0 && !loading ? (
+        <Alert severity="info">No holdings found for this client</Alert>
+      ) : (
+        <>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {holdings.length} position{holdings.length !== 1 ? 's' : ''}
+          </Typography>
       
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'ticker'}
-                  direction={orderBy === 'ticker' ? order : 'asc'}
-                  onClick={() => handleSort('ticker')}
-                >
-                  Ticker
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'name'}
-                  direction={orderBy === 'name' ? order : 'asc'}
-                  onClick={() => handleSort('name')}
-                >
-                  Name
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">
-                <TableSortLabel
-                  active={orderBy === 'weight'}
-                  direction={orderBy === 'weight' ? order : 'asc'}
-                  onClick={() => handleSort('weight')}
-                >
-                  Weight %
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">
-                <TableSortLabel
-                  active={orderBy === 'shares'}
-                  direction={orderBy === 'shares' ? order : 'asc'}
-                  onClick={() => handleSort('shares')}
-                >
-                  Shares
-                </TableSortLabel>
-              </TableCell>
-              <TableCell align="right">
-                <TableSortLabel
-                  active={orderBy === 'avg_cost'}
-                  direction={orderBy === 'avg_cost' ? order : 'asc'}
-                  onClick={() => handleSort('avg_cost')}
-                >
-                  Avg Cost
-                </TableSortLabel>
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sortedHoldings.map((holding, index) => (
-              <TableRow key={index} hover>
-                <TableCell>
-                  <Typography variant="body2" fontWeight="medium">
-                    {holding.ticker}
-                  </Typography>
-                </TableCell>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
                   <TableCell>
-                    <Typography variant="body2">
-                      {holding.instrument_name || holding.name || '-'}
-                    </Typography>
+                    <TableSortLabel
+                      active={orderBy === 'ticker'}
+                      direction={orderBy === 'ticker' ? order : 'asc'}
+                      onClick={() => handleSort('ticker')}
+                    >
+                      Ticker
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell>
+                    <TableSortLabel
+                      active={orderBy === 'name'}
+                      direction={orderBy === 'name' ? order : 'asc'}
+                      onClick={() => handleSort('name')}
+                    >
+                      Name
+                    </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography variant="body2">
-                      {(holding.weight * 100).toFixed(2)}%
-                    </Typography>
+                    <TableSortLabel
+                      active={orderBy === 'weight'}
+                      direction={orderBy === 'weight' ? order : 'asc'}
+                      onClick={() => handleSort('weight')}
+                    >
+                      Weight %
+                    </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography variant="body2">
-                      {holding.shares !== null && holding.shares !== undefined
-                        ? holding.shares.toLocaleString()
-                        : '-'}
-                    </Typography>
+                    <TableSortLabel
+                      active={orderBy === 'shares'}
+                      direction={orderBy === 'shares' ? order : 'asc'}
+                      onClick={() => handleSort('shares')}
+                    >
+                      Shares
+                    </TableSortLabel>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography variant="body2">
-                      {holding.avg_cost !== null && holding.avg_cost !== undefined
-                        ? `$${holding.avg_cost.toFixed(2)}`
-                        : '-'}
-                    </Typography>
+                    <TableSortLabel
+                      active={orderBy === 'avg_cost'}
+                      direction={orderBy === 'avg_cost' ? order : 'asc'}
+                      onClick={() => handleSort('avg_cost')}
+                    >
+                      Avg Cost
+                    </TableSortLabel>
                   </TableCell>
+                  <TableCell align="center">Actions</TableCell>
                 </TableRow>
-              ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+              </TableHead>
+              <TableBody>
+                {sortedHoldings.map((holding, index) => (
+                  <TableRow key={index} hover>
+                    <TableCell>
+                      <Typography variant="body2" fontWeight="medium">
+                        {holding.ticker}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {holding.instrument_name || holding.name || '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">
+                        {(holding.weight * 100).toFixed(2)}%
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">
+                        {holding.shares !== null && holding.shares !== undefined
+                          ? holding.shares.toLocaleString()
+                          : '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography variant="body2">
+                        {holding.avg_cost !== null && holding.avg_cost !== undefined
+                          ? `$${holding.avg_cost.toFixed(2)}`
+                          : '-'}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="Edit">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleEditClick(holding)}
+                          disabled={loading}
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete">
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteClick(holding)}
+                          disabled={loading}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </>
+      )}
+      
+      <PortfolioEditDialog
+        open={editDialogOpen}
+        onClose={() => setEditDialogOpen(false)}
+        onSuccess={handleEditSuccess}
+        holding={selectedHolding}
+        clientGuid={clientGuid}
+        authToken={authToken}
+        mode={editMode}
+      />
+
+      <Dialog open={deleteDialogOpen} onClose={() => !deleting && setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Holding?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to remove <strong>{holdingToDelete?.ticker}</strong> from the portfolio?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            color="error"
+            variant="contained"
+            disabled={deleting}
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       
       <style>{`
         @keyframes pulse {
