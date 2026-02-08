@@ -18,7 +18,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     telnet \
     traceroute \
     tcpdump \
+    python3 \
+    python3-pip \
+    python3-venv \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Semgrep (SAST scanner)
+RUN python3 -m pip install --break-system-packages semgrep
+
+# Install Trivy (vulnerability / image scanner)
+RUN set -eux; \
+    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
 
 # Install Docker CLI from Docker's official repository
 RUN set -eux; \

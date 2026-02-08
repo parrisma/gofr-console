@@ -13,10 +13,11 @@ export function uiConfigPlugin(): Plugin {
       server.middlewares.use('/api/config', (req, res, next) => {
         if (req.method === 'GET') {
           try {
+            // eslint-disable-next-line security/detect-non-literal-fs-filename
             const config = fs.readFileSync(CONFIG_FILE, 'utf-8');
             res.setHeader('Content-Type', 'application/json');
             res.end(config);
-          } catch (err) {
+          } catch {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: 'Failed to read config' }));
           }
@@ -31,10 +32,11 @@ export function uiConfigPlugin(): Plugin {
               // Validate JSON
               const config = JSON.parse(body);
               // Write to file with pretty formatting
+              // eslint-disable-next-line security/detect-non-literal-fs-filename
               fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n');
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify({ success: true }));
-            } catch (err) {
+            } catch {
               res.statusCode = 400;
               res.end(JSON.stringify({ error: 'Invalid JSON' }));
             }

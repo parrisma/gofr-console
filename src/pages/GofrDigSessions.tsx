@@ -29,27 +29,6 @@ import type {
 import LinkIcon from '@mui/icons-material/Link';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
-function JsonBlock({ data }: { data: unknown }) {
-  if (!data) return null;
-  return (
-    <Box
-      component="pre"
-      sx={{
-        mt: 2,
-        p: 2,
-        bgcolor: 'background.paper',
-        borderRadius: 1,
-        overflow: 'auto',
-        fontSize: 12,
-        border: '1px solid',
-        borderColor: 'divider',
-      }}
-    >
-      {JSON.stringify(data, null, 2)}
-    </Box>
-  );
-}
-
 function FieldTip({ tip }: { tip: string }) {
   return (
     <Tooltip title={tip} arrow placement="top" enterDelay={200}>
@@ -96,7 +75,6 @@ export default function GofrDigSessions() {
 
   // Chunk URLs
   const [sessionUrls, setSessionUrls] = useState<SessionUrlsResponse | null>(null);
-  const [sessionUrlsLoading, setSessionUrlsLoading] = useState(false);
 
   const requireToken = (): string | undefined => selectedToken?.token;
 
@@ -195,32 +173,6 @@ export default function GofrDigSessions() {
     } finally {
       setSessionChunkLoading(false);
     }
-  };
-
-  /**
-   * Aggressively unwrap a value through multiple JSON-encoded string layers.
-   * Returns { obj, text } — obj if we got an object, text if the best we got is a string.
-   */
-  const deepUnwrap = (raw: unknown): { obj: Record<string, unknown> | null; text: string } => {
-    let data: unknown = raw;
-    let lastString = typeof raw === 'string' ? (raw as string) : '';
-    for (let i = 0; i < 5 && typeof data === 'string'; i++) {
-      lastString = data as string;
-      try {
-        data = JSON.parse(data as string);
-      } catch {
-        // Server embeds literal newlines/tabs inside JSON string values — escape and retry
-        try {
-          const sanitised = (data as string).replace(/[\n\r\t]/g, m =>
-            m === '\n' ? '\\n' : m === '\r' ? '\\r' : '\\t');
-          data = JSON.parse(sanitised);
-        } catch { break; }
-      }
-    }
-    if (typeof data === 'object' && data !== null) {
-      return { obj: data as Record<string, unknown>, text: '' };
-    }
-    return { obj: null, text: lastString };
   };
 
   /** Extract the raw string content from a chunk API response.
