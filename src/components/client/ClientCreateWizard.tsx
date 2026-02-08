@@ -5,7 +5,7 @@
  * Steps: 1) Basic Info, 2) Investment Profile, 3) Alert Settings, 4) ESG & Restrictions
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -31,8 +31,6 @@ import {
   Card,
   CardContent,
   CardActionArea,
-  RadioGroup,
-  Radio,
 } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import {
@@ -45,8 +43,8 @@ import {
 } from '../../types/clientProfile';
 import type { ClientRestrictions } from '../../types/restrictions';
 import RestrictionsEditor from './RestrictionsEditor';
-import { 
-  RESTRICTION_TEMPLATES, 
+import {
+  RESTRICTION_TEMPLATES_LIST,
   applyTemplate,
   type TemplateId,
 } from '../../utils/restrictionTemplates';
@@ -351,7 +349,7 @@ export default function ClientCreateWizard({
                 Quick Templates
               </Typography>
               <Grid container spacing={2}>
-                {Object.values(RESTRICTION_TEMPLATES).map((template) => (
+                {RESTRICTION_TEMPLATES_LIST.map((template) => (
                   <Grid key={template.id} size={{ xs: 12, sm: 6, md: 4 }}>
                     <Card
                       variant="outlined"

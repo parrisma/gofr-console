@@ -20,19 +20,7 @@ import { api } from '../../services/api';
 import DocumentViewDialog from './DocumentViewDialog';
 import { getIndustryLabel } from '../../types/restrictions';
 import type { ClientRestrictions } from '../../types/restrictions';
-
-interface NewsArticle {
-  document_guid?: string;
-  guid?: string;
-  title: string;
-  impact_score: number;
-  impact_tier: string;
-  created_at: string;
-  source_name?: string;
-  affected_instruments?: string[];
-  reasons?: string[];
-  why_it_matters?: string;
-}
+import type { NewsArticle } from '../../types/gofrIQ';
 
 interface ClientNewsPanelProps {
   clientGuid: string;
@@ -84,7 +72,7 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
       try {
         // Apply threshold filter unless "show all" is toggled
         const effectiveThreshold = showAllArticles ? 0 : (impactThreshold ?? 0);
-        const response = await api.getClientFeed(authToken, clientGuid, 10, effectiveThreshold);
+        const response = await api.getClientFeed(authToken, clientGuid, 3, effectiveThreshold);
         if (cancelled) {
           console.log(`News fetch for ${clientName} cancelled (stale)`);
           return;
@@ -114,7 +102,7 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
     };
   }, [clientGuid, clientName, authToken, impactThreshold, showAllArticles]);
 
-  const getTierColor = (tier: string): 'error' | 'warning' | 'info' | 'default' => {
+  const getTierColor = (tier?: string): 'error' | 'warning' | 'info' | 'default' => {
     switch (tier) {
       case 'PLATINUM': return 'error';
       case 'GOLD': return 'warning';
@@ -123,7 +111,8 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
     }
   };
 
-  const formatDate = (dateStr: string): string => {
+  const formatDate = (dateStr?: string): string => {
+    if (!dateStr) return '';
     try {
       const date = new Date(dateStr);
       const now = new Date();

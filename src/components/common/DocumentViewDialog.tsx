@@ -35,8 +35,8 @@ interface DocumentViewDialogProps {
 
 interface DocumentData {
   guid: string;
-  title: string;
-  content: string;
+  title?: string;
+  content?: string;
   source_name?: string;
   source_guid?: string;
   language?: string;
@@ -79,7 +79,8 @@ export default function DocumentViewDialog({
 
     try {
       const data = await api.getDocument(authToken, documentGuid);
-      setDocument(data);
+      // Cast to DocumentData which has index signature for additional fields
+      setDocument(data as DocumentData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load document');
     } finally {

@@ -86,3 +86,14 @@ See `src/services/api/index.ts` for `McpClient` class with session management.
 - Use the **project logger** (e.g., `StructuredLogger`), **not** `print()` or default logging.
 - Logs must be **clear and actionable**, not cryptic.
 - All errors must include **cause, references/context**, and **recovery options** where possible.
+
+## Hardening Guidance
+- Prefer `ApiError` (src/services/api/errors.ts) for API failures and include service/tool context and recovery hints.
+- Avoid generic “Failed to parse/failed to load” messages; surface root cause and next step.
+- Centralize parsing and error normalization in the API layer; UI should display actionable error messages.
+- For MCP failures, include tool name and suggest recovery (re-auth, check MCP health, retry).
+## Type Safety
+- Use shared types from `src/types/` for API responses and entities (e.g., `ClientSummary`, `NewsArticle`).
+- ESLint rules forbid local `ClientProfile`, `Source`, `Instrument` interfaces in pages; import from shared types.
+- API methods should have explicit return type annotations using types from `src/types/gofrIQ.ts`.
+- When API returns nested data (e.g., `profile.mandate_type`), flatten it in the API layer or provide mapping functions.

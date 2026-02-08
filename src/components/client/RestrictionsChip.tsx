@@ -5,7 +5,6 @@
  * Shows color-coded badges for exclusions (red) and impact themes (green).
  */
 
-import React from 'react';
 import {
   Box,
   Chip,

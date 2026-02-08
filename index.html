@@ -3,11 +3,53 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GOFR Console</title>
+    <style>
+      .gofr-loading {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: #121212;
+        color: #eaeaea;
+        font-family: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      .gofr-loading img {
+        width: 72px;
+        height: 72px;
+        object-fit: contain;
+        opacity: 0.9;
+      }
+      .gofr-loading h1 {
+        font-family: 'Sora', 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+        font-size: 20px;
+        margin: 0;
+        letter-spacing: 0.4px;
+      }
+      .gofr-loading p {
+        margin: 0;
+        font-size: 13px;
+        color: #9aa0a6;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="gofr-loading">
+        <img src="/logo.png" alt="GOFR" />
+        <h1>Loading GOFR Console</h1>
+        <p>Initializing client workspace…</p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

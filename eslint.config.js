@@ -21,5 +21,36 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "TSInterfaceDeclaration[id.name='ClientProfile']",
+          message: 'Do not define a local ClientProfile interface. Use the shared type from src/types/clientProfile.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/pages/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "TSInterfaceDeclaration[id.name='Source']",
+          message: 'Do not define a local Source interface. Use the shared type from src/types/gofrIQ.',
+        },
+        {
+          selector: "TSInterfaceDeclaration[id.name='Instrument']",
+          message: 'Do not define a local Instrument interface. Use the shared type from src/types/gofrIQ.',
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/types/clientProfile.ts'],
+    rules: {
+      'no-restricted-syntax': 'off',
+    },
   },
 ])

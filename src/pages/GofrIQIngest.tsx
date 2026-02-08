@@ -16,28 +16,12 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
-import { CloudUpload, ContentPaste, CheckCircle, Search, Description } from '@mui/icons-material';
+import { CloudUpload, ContentPaste, CheckCircle, Search } from '@mui/icons-material';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
-
-interface Source {
-  source_guid: string;
-  name: string;
-  type: string;
-  region: string | null;
-  languages: string[];
-  trust_level: string;
-  active: boolean;
-}
-
-interface IngestResult {
-  guid: string;
-  group_guid: string;
-  language: string;
-  embedding_generated: boolean;
-}
+import type { Source, IngestResult } from '../types/gofrIQ';
 
 export default function GofrIQIngest() {
   const { tokens } = useConfig();

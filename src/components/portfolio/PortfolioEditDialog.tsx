@@ -125,13 +125,13 @@ export default function PortfolioEditDialog({
             await api.addToPortfolio(authToken, clientGuid, tickerUpper, weightNum, sharesNum, avgCostNum);
             onSuccess();
             onClose();
-          } catch (addError) {
+          } catch {
             // Rollback: restore original holding
             setError('Failed to update holding. Attempting to restore original...');
             try {
               await api.addToPortfolio(authToken, clientGuid, originalTicker, originalWeight, originalShares, originalAvgCost);
               setError('Update failed but original holding was restored');
-            } catch (rollbackError) {
+            } catch {
               setError('CRITICAL: Update failed and rollback failed. Original holding may be lost. Please check manually.');
             }
           }

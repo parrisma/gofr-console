@@ -26,26 +26,8 @@ import { ClientNewsPanel } from '../components/common/ClientNewsPanel';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
-import type { ClientProfile as ClientProfileType, ClientProfileUpdate } from '../types/clientProfile';
-
-interface Client {
-  guid: string;
-  name: string;
-  client_type: string;
-}
-
-interface ClientProfile {
-  name: string;
-  client_type: string;
-  alert_frequency?: string;
-  impact_threshold?: number;
-  mandate_type?: string;
-  benchmark?: string;
-  horizon?: string;
-  esg_constrained?: boolean;
-  turnover_rate?: number;
-  mandate_text?: string;
-}
+import type { ClientProfile as ClientProfileType, ClientProfileUpdate, MandateType, Horizon, AlertFrequency } from '../types/clientProfile';
+import type { ClientSummary, ProfileScoreResponse } from '../types/gofrIQ';
 
 interface ScoreBreakdown {
   holdings: { score: number; weight: number };
@@ -60,6 +42,26 @@ interface ProfileScore {
   missing_fields: string[];
 }
 
+/** Map API ProfileScoreResponse to local ProfileScore interface */
+function mapProfileScore(response: ProfileScoreResponse): ProfileScore | null {
+  const score = response.score ?? response.completeness_score;
+  if (score === undefined) return null;
+  
+  // Default breakdown values
+  const defaultSection = { score: 0, weight: 0 };
+  
+  return {
+    score,
+    breakdown: {
+      holdings: response.breakdown?.holdings ?? defaultSection,
+      mandate: response.breakdown?.mandate ?? defaultSection,
+      constraints: response.breakdown?.constraints ?? defaultSection,
+      engagement: response.breakdown?.engagement ?? defaultSection,
+    },
+    missing_fields: response.missing_fields ?? [],
+  };
+}
+
 export default function Client360View() {
   const { tokens } = useConfig();
   
@@ -68,10 +70,10 @@ export default function Client360View() {
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientSummary[]>([]);
   const [selectedClientGuid, setSelectedClientGuid] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
+  const [clientProfile, setClientProfile] = useState<ClientProfileType | null>(null);
   const [profileScore, setProfileScore] = useState<ProfileScore | null>(null);
 
   // Edit dialog state
@@ -119,12 +121,12 @@ export default function Client360View() {
 
     try {
       const result = await api.listClients(selectedToken.token);
-      console.log('Clients loaded:', result.clients?.map((c: Client) => ({ name: c.name, guid: c.guid })));
+      console.log('Clients loaded:', result.clients?.map((c) => ({ name: c.name, guid: c.guid })));
       
       // Filter clients to only those the user has permission to access
       // by testing profile access for each client
       const allClients = result.clients || [];
-      const accessibleClients: Client[] = [];
+      const accessibleClients: ClientSummary[] = [];
       
       for (const client of allClients) {
         if (!isValidGuid(client.guid)) {
@@ -135,7 +137,7 @@ export default function Client360View() {
         try {
           await api.getClientProfile(selectedToken.token, client.guid);
           accessibleClients.push(client);
-        } catch (err) {
+        } catch {
           // If profile fails to load, likely a permissions issue - skip this client
           console.log(`Skipping client ${client.name} (${client.guid}): no access`);
         }
@@ -171,18 +173,21 @@ export default function Client360View() {
       console.log('profile.mandate_text:', profileResponse.profile?.mandate_text);
       
       // Flatten nested structure from backend
-      const flatProfile: ClientProfile = {
-        name: profileResponse.name,
-        client_type: profileResponse.client_type,
-        // Extract from nested 'profile' object
-        mandate_type: profileResponse.profile?.mandate_type,
+      const flatProfile: ClientProfileType = {
+        name: profileResponse.name ?? '',
+        client_type: profileResponse.client_type ?? '',
+        // Extract from nested 'profile' object (cast strings to literal types)
+        mandate_type: profileResponse.profile?.mandate_type as MandateType | undefined,
         benchmark: profileResponse.profile?.benchmark,
-        horizon: profileResponse.profile?.horizon,
+        horizon: profileResponse.profile?.horizon as Horizon | undefined,
         esg_constrained: profileResponse.profile?.esg_constrained,
-        turnover_rate: profileResponse.profile?.turnover_rate,
+        turnover_rate: typeof profileResponse.profile?.turnover_rate === 'number' 
+          ? profileResponse.profile.turnover_rate 
+          : undefined,
         mandate_text: profileResponse.profile?.mandate_text,
+        restrictions: profileResponse.profile?.restrictions,
         // Extract from nested 'settings' object
-        alert_frequency: profileResponse.settings?.alert_frequency,
+        alert_frequency: profileResponse.settings?.alert_frequency as AlertFrequency | undefined,
         impact_threshold: profileResponse.settings?.impact_threshold,
       };
       
@@ -192,9 +197,9 @@ export default function Client360View() {
 
       // Fetch score (optional - may fail if backend tool doesn't exist yet)
       try {
-        const score = await api.getClientProfileScore(selectedToken.token, clientGuid);
-        console.log('Profile score loaded:', score);
-        setProfileScore(score);
+        const scoreResponse = await api.getClientProfileScore(selectedToken.token, clientGuid);
+        console.log('Profile score loaded:', scoreResponse);
+        setProfileScore(mapProfileScore(scoreResponse));
       } catch (scoreErr) {
         console.warn('Failed to load profile score (tool may not exist yet):', scoreErr);
         setProfileScore(null);
@@ -207,6 +212,35 @@ export default function Client360View() {
       setProfileLoading(false);
     }
   };
+
+  const BrandedEmptyState = ({
+    title,
+    children,
+    severity = 'info',
+  }: {
+    title: string;
+    children: React.ReactNode;
+    severity?: 'info' | 'warning' | 'error' | 'success';
+  }) => (
+    <Box sx={{ position: 'relative' }}>
+      <Box
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'url(/logo.png)',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 24px bottom 24px',
+          backgroundSize: '96px',
+          opacity: 0.06,
+          pointerEvents: 'none',
+        }}
+      />
+      <Alert severity={severity} sx={{ position: 'relative' }}>
+        <AlertTitle>{title}</AlertTitle>
+        {children}
+      </Alert>
+    </Box>
+  );
 
   // Handle edit dialog open
   const handleEditOpen = () => {
@@ -331,25 +365,22 @@ export default function Client360View() {
         {/* Main Content: Client 360 Dashboard */}
         <Box sx={{ flex: 1 }}>
           {!selectedClient && !loading && !selectedToken && (
-            <Alert severity="warning">
-              <AlertTitle>No Token Selected</AlertTitle>
+            <BrandedEmptyState title="No Token Selected" severity="warning">
               Select an authentication token from the dropdown above to load clients.
-            </Alert>
+            </BrandedEmptyState>
           )}
 
           {!selectedClient && !loading && selectedToken && clients.length === 0 && (
-            <Alert severity="info">
-              <AlertTitle>No Clients Available</AlertTitle>
-              No clients were found for the selected token ({selectedToken.name}). 
+            <BrandedEmptyState title="No Clients Available">
+              No clients were found for the selected token ({selectedToken.name}).
               This may mean no clients have been created yet, or this token does not have access to any clients.
-            </Alert>
+            </BrandedEmptyState>
           )}
 
           {!selectedClient && !loading && selectedToken && clients.length > 0 && (
-            <Alert severity="info">
-              <AlertTitle>No Client Selected</AlertTitle>
+            <BrandedEmptyState title="No Client Selected">
               Select a client from the list to view their 360 profile.
-            </Alert>
+            </BrandedEmptyState>
           )}
 
           {selectedClient && !isValidGuid(selectedClient.guid) && (

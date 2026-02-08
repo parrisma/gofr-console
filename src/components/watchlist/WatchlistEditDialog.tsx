@@ -107,13 +107,13 @@ export default function WatchlistEditDialog({
             await api.addToWatchlist(authToken, clientGuid, tickerUpper, thresholdNum);
             onSuccess();
             onClose();
-          } catch (addError) {
+          } catch {
             // Rollback: restore original item
             setError('Failed to update watchlist item. Attempting to restore original...');
             try {
               await api.addToWatchlist(authToken, clientGuid, originalTicker, originalThreshold);
               setError('Update failed but original item was restored');
-            } catch (rollbackError) {
+            } catch {
               setError('CRITICAL: Update failed and rollback failed. Original item may be lost. Please check manually.');
             }
           }

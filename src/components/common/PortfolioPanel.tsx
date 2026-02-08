@@ -162,9 +162,30 @@ export const PortfolioPanel: React.FC<PortfolioPanelProps> = ({ clientGuid, auth
     setOrderBy(property);
   };
 
+  const getHoldingSortValue = (holding: Holding, key: keyof Holding) => {
+    switch (key) {
+      case 'ticker':
+        return holding.ticker;
+      case 'name':
+        return holding.name ?? '';
+      case 'instrument_name':
+        return holding.instrument_name ?? '';
+      case 'weight':
+        return holding.weight;
+      case 'weight_pct':
+        return holding.weight_pct ?? '';
+      case 'shares':
+        return holding.shares ?? 0;
+      case 'avg_cost':
+        return holding.avg_cost ?? 0;
+      default:
+        return '';
+    }
+  };
+
   const sortedHoldings = [...holdings].sort((a, b) => {
-    const aValue = a[orderBy];
-    const bValue = b[orderBy];
+    const aValue = getHoldingSortValue(a, orderBy);
+    const bValue = getHoldingSortValue(b, orderBy);
     
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return order === 'asc' ? aValue - bValue : bValue - aValue;

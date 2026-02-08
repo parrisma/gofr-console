@@ -9,4 +9,13 @@ export const theme = createTheme({
     success: { main: '#00C853' },
     error: { main: '#FF1744' },
   },
+  typography: {
+    fontFamily: "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif",
+    h1: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
+    h2: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
+    h3: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
+    h4: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
+    h5: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
+    h6: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
+  },
 });

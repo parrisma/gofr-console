@@ -64,6 +64,7 @@ export default function RestrictionsEditor({
   
   const excludedIndustries = value.ethical_sector?.excluded_industries || [];
   const faithBased = value.ethical_sector?.faith_based;
+  const faithBasedSelectValue = faithBased || '';
   
   const handleIndustryToggle = (industry: ExcludedIndustry) => {
     const current = excludedIndustries;
@@ -194,7 +195,7 @@ export default function RestrictionsEditor({
                 Apply additional restrictions based on religious values.
               </Typography>
               <Select
-                value={faithBased || ''}
+                value={faithBasedSelectValue}
                 onChange={handleFaithBasedChange}
                 displayEmpty
               >

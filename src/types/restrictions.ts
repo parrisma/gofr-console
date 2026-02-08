@@ -236,48 +236,74 @@ export function validateFaithBased(code: string): boolean {
  * Get human-readable label for excluded industry code.
  */
 export function getIndustryLabel(code: ExcludedIndustry): string {
-  const labels: Record<ExcludedIndustry, string> = {
-    TOBACCO: 'Tobacco',
-    WEAPONS: 'Weapons & Defense',
-    GAMBLING: 'Gambling',
-    PORNOGRAPHY: 'Adult Entertainment',
-    ALCOHOL: 'Alcohol',
-    FOSSIL_FUELS: 'Fossil Fuels',
-    PRIVATE_PRISONS: 'Private Prisons',
-    PREDATORY_LENDING: 'Predatory Lending',
-    ANIMAL_TESTING: 'Animal Testing',
-    PALM_OIL: 'Palm Oil',
-  };
-  return labels[code] || code;
+  switch (code) {
+    case 'TOBACCO':
+      return 'Tobacco';
+    case 'WEAPONS':
+      return 'Weapons & Defense';
+    case 'GAMBLING':
+      return 'Gambling';
+    case 'PORNOGRAPHY':
+      return 'Adult Entertainment';
+    case 'ALCOHOL':
+      return 'Alcohol';
+    case 'FOSSIL_FUELS':
+      return 'Fossil Fuels';
+    case 'PRIVATE_PRISONS':
+      return 'Private Prisons';
+    case 'PREDATORY_LENDING':
+      return 'Predatory Lending';
+    case 'ANIMAL_TESTING':
+      return 'Animal Testing';
+    case 'PALM_OIL':
+      return 'Palm Oil';
+    default:
+      return code;
+  }
 }
 
 /**
  * Get human-readable label for impact theme.
  */
 export function getImpactThemeLabel(theme: ImpactTheme): string {
-  const labels: Record<ImpactTheme, string> = {
-    clean_energy: 'Clean Energy',
-    sustainable_transport: 'Sustainable Transport',
-    affordable_housing: 'Affordable Housing',
-    healthcare_access: 'Healthcare Access',
-    education_equity: 'Education Equity',
-    financial_inclusion: 'Financial Inclusion',
-    circular_economy: 'Circular Economy',
-    biodiversity: 'Biodiversity',
-    water_conservation: 'Water Conservation',
-    climate_adaptation: 'Climate Adaptation',
-  };
-  return labels[theme] || theme;
+  switch (theme) {
+    case 'clean_energy':
+      return 'Clean Energy';
+    case 'sustainable_transport':
+      return 'Sustainable Transport';
+    case 'affordable_housing':
+      return 'Affordable Housing';
+    case 'healthcare_access':
+      return 'Healthcare Access';
+    case 'education_equity':
+      return 'Education Equity';
+    case 'financial_inclusion':
+      return 'Financial Inclusion';
+    case 'circular_economy':
+      return 'Circular Economy';
+    case 'biodiversity':
+      return 'Biodiversity';
+    case 'water_conservation':
+      return 'Water Conservation';
+    case 'climate_adaptation':
+      return 'Climate Adaptation';
+    default:
+      return theme;
+  }
 }
 
 /**
  * Get human-readable label for faith-based code.
  */
 export function getFaithBasedLabel(code: FaithBasedCode): string {
-  const labels: Record<FaithBasedCode, string> = {
-    shariah: 'Shariah Compliant',
-    catholic: 'Catholic Values',
-    methodist: 'Methodist Values',
-  };
-  return labels[code] || code;
+  switch (code) {
+    case 'shariah':
+      return 'Shariah Compliant';
+    case 'catholic':
+      return 'Catholic Values';
+    case 'methodist':
+      return 'Methodist Values';
+    default:
+      return code;
+  }
 }

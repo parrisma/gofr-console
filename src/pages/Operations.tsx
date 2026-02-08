@@ -142,7 +142,10 @@ export default function Operations() {
   };
 
   const openEditToken = (index: number) => {
-    const t = tokens[index];
+    const t = tokens.find((_, i) => i === index);
+    if (!t) {
+      return;
+    }
     setTokenDialog({
       open: true,
       mode: 'edit',

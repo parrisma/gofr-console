@@ -16,11 +16,12 @@ const mcpServices = [
 ];
 
 // Build proxy config for all MCP services
-const proxyConfig: Record<string, { target: string; changeOrigin: boolean; rewrite: (path: string) => string }> = {};
+const proxyConfig: Record<string, { target: string; changeOrigin: boolean; rewrite: (path: string) => string; followRedirects: boolean }> = {};
 for (const { name, host, port } of mcpServices) {
   proxyConfig[`/api/${name}`] = {
     target: `http://${host}:${port}`,
     changeOrigin: true,
+    followRedirects: true,
     rewrite: (path: string) => path.slice(`/api/${name}`.length),
   };
 }

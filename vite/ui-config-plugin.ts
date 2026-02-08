@@ -1,5 +1,5 @@
 // Vite plugin to serve and save UI config
-import { Plugin } from 'vite';
+import type { Plugin } from 'vite';
 import fs from 'fs';
 import path from 'path';
 

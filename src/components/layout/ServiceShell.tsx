@@ -4,23 +4,32 @@ import { ArrowBack, MonitorHeart, Storage, FileUpload, People, Dashboard } from 
 
 const drawerWidth = 60;
 
+interface ServiceShellNavItem {
+  path: string;
+  icon: React.ReactNode;
+  label: string;
+}
+
 interface ServiceShellProps {
   children: React.ReactNode;
   serviceName: string;
   serviceRoute: string;
+  navItems?: ServiceShellNavItem[];
 }
 
-export default function ServiceShell({ children, serviceName, serviceRoute }: ServiceShellProps) {
+export default function ServiceShell({ children, serviceName, serviceRoute, navItems }: ServiceShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const navItems = [
+  const defaultNavItems: ServiceShellNavItem[] = [
     { path: `${serviceRoute}/health`, icon: <MonitorHeart />, label: 'Health' },
     { path: `${serviceRoute}/sources`, icon: <Storage />, label: 'Sources' },
     { path: `${serviceRoute}/clients`, icon: <People />, label: 'Clients' },
     { path: `${serviceRoute}/client-360`, icon: <Dashboard />, label: 'Client 360' },
     { path: `${serviceRoute}/ingest`, icon: <FileUpload />, label: 'Ingest' },
   ];
+
+  const resolvedNavItems = navItems ?? defaultNavItems;
 
   return (
     <Box sx={{ display: 'flex' }}>
@@ -83,9 +92,9 @@ export default function ServiceShell({ children, serviceName, serviceRoute }: Se
               sx={{ height: 32, width: 32, objectFit: 'contain' }}
             />
           </IconButton>
-          {navItems.map((item) => (
+          {resolvedNavItems.map((item) => (
             <IconButton
-              key={item.path}
+              key={item.label}
               color={location.pathname === item.path ? 'primary' : 'inherit'}
               onClick={() => navigate(item.path)}
               sx={{ mb: 2 }}

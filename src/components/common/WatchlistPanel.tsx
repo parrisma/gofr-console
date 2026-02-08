@@ -170,9 +170,32 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
     setOrderBy(property);
   };
 
+  const getWatchlistSortValue = (item: WatchlistItem, key: keyof WatchlistItem) => {
+    switch (key) {
+      case 'ticker':
+        return item.ticker;
+      case 'instrument_name':
+        return item.instrument_name ?? '';
+      case 'name':
+        return item.name ?? '';
+      case 'alert_threshold':
+        return item.alert_threshold ?? 0;
+      case 'price_threshold':
+        return item.price_threshold ?? 0;
+      case 'volume_threshold':
+        return item.volume_threshold ?? 0;
+      case 'current_price':
+        return item.current_price ?? 0;
+      case 'current_volume':
+        return item.current_volume ?? 0;
+      default:
+        return '';
+    }
+  };
+
   const sortedWatchlist = [...watchlist].sort((a, b) => {
-    const aValue = a[orderBy];
-    const bValue = b[orderBy];
+    const aValue = getWatchlistSortValue(a, orderBy);
+    const bValue = getWatchlistSortValue(b, orderBy);
     
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return order === 'asc' ? aValue - bValue : bValue - aValue;
@@ -184,17 +207,6 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
       ? aString.localeCompare(bString) 
       : bString.localeCompare(aString);
   });
-
-  const isThresholdBreached = (item: WatchlistItem): boolean => {
-    // Backend doesn't provide current_price/volume yet, so no breaches
-    if (item.current_price && item.price_threshold && item.current_price > item.price_threshold) {
-      return true;
-    }
-    if (item.current_volume && item.volume_threshold && item.current_volume > item.volume_threshold) {
-      return true;
-    }
-    return false;
-  };
 
   const SkeletonTable = () => (
     <Paper sx={{ p: 3 }}>
@@ -320,9 +332,7 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody>
-                {sortedWatchlist.map((item, index) => {
-                  const breached = isThresholdBreached(item);
-                  return (
+                {sortedWatchlist.map((item, index) => (
                     <TableRow key={index} hover>
                       <TableCell>
                         <Typography variant="body2" fontWeight="medium">
@@ -363,8 +373,7 @@ export const WatchlistPanel: React.FC<WatchlistPanelProps> = ({
                         </Tooltip>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                ))}
               </TableBody>
             </Table>
           </TableContainer>

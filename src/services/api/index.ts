@@ -3,6 +3,36 @@
 
 import { configStore } from '../../stores/configStore';
 import type { ClientRestrictions } from '../../types/restrictions';
+import { ApiError, defaultRecoveryHint } from './errors';
+import type { 
+  ClientSummary, 
+  Source, 
+  Instrument, 
+  IngestResult,
+  ClientProfileResponse,
+  ProfileScoreResponse,
+  MarketContextResponse,
+  UpdateProfileResponse,
+  CreateClientResponse,
+  DocumentResponse,
+  ClientFeedResponse,
+  PortfolioHoldingsResponse,
+  PortfolioUpdateResponse,
+  WatchlistResponse,
+  WatchlistUpdateResponse,
+  InstrumentNewsResponse,
+} from '../../types/gofrIQ';
+import type {
+  AntiDetectionConfig,
+  AntiDetectionResponse,
+  ContentOptions,
+  ContentResponse,
+  DigPingResponse,
+  PageStructureResponse,
+  SessionChunkResponse,
+  SessionInfoResponse,
+  StructureOptions,
+} from '../../types/gofrDig';
 
 // Dynamic base URL based on config
 function getBaseUrl(serviceName: string): string {
@@ -34,6 +64,48 @@ interface HealthCheckResult {
   }>;
 }
 
+function getTextContent(result: HealthCheckResult, service: string, tool: string): string {
+  const textContent = result.content?.find(c => c.type === 'text')?.text;
+  if (!textContent) {
+    throw new ApiError({
+      service,
+      tool,
+      message: 'No response content returned',
+      recovery: defaultRecoveryHint(),
+    });
+  }
+  return textContent;
+}
+
+function parseToolText<T>(
+  service: string,
+  tool: string,
+  textContent: string
+): T {
+  try {
+    const parsed = JSON.parse(textContent);
+    if (parsed.status === 'error') {
+      throw new ApiError({
+        service,
+        tool,
+        code: parsed.error_code,
+        message: parsed.message || 'Tool returned error',
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return (parsed.data || parsed) as T;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError({
+      service,
+      tool,
+      message: err instanceof Error ? err.message : 'Failed to parse response',
+      recovery: 'Check MCP logs for malformed output.',
+      cause: err,
+    });
+  }
+}
+
 // Parse SSE response to get JSON-RPC message
 async function parseSseResponse<T>(response: Response): Promise<JsonRpcResponse<T>> {
   const text = await response.text();
@@ -53,6 +125,8 @@ class McpClient {
   private serviceName: string;
   private sessionId: string | null = null;
   private requestId = 0;
+  /** Mutex: if an initialize() is in-flight, all callers share this single promise */
+  private initPromise: Promise<void> | null = null;
 
   constructor(serviceName: string) {
     this.serviceName = serviceName;
@@ -71,8 +145,22 @@ class McpClient {
     return configStore.getMcpPort(this.serviceName);
   }
 
-  // Initialize MCP session
+  // Initialize MCP session (with mutex to prevent concurrent races)
   async initialize(): Promise<void> {
+    // If another caller is already initializing, piggy-back on that promise
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+    this.initPromise = this.doInitialize();
+    try {
+      await this.initPromise;
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  /** Internal initialization — callers must go through initialize() for mutex */
+  private async doInitialize(): Promise<void> {
     const request: JsonRpcRequest = {
       jsonrpc: '2.0',
       id: this.nextId(),
@@ -137,10 +225,11 @@ class McpClient {
   resetSession(): void {
     this.sessionId = null;
     this.requestId = 0;
+    this.initPromise = null;
   }
 
   // Call an MCP tool
-  async callTool<T>(toolName: string, args: Record<string, unknown> = {}, authToken?: string): Promise<T> {
+  async callTool<T>(toolName: string, args: Record<string, unknown> = {}, authToken?: string, _retried = false): Promise<T> {
     // Ensure session is initialized
     if (!this.sessionId) {
       await this.initialize();
@@ -167,25 +256,76 @@ class McpClient {
       headers['Authorization'] = `Bearer ${authToken}`;
     }
 
-    const response = await fetch(`${this.baseUrl}/mcp`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      // Session may have expired, try re-initializing
-      if (response.status === 400 || response.status === 404) {
-        this.sessionId = null;
-        await this.initialize();
-        return this.callTool(toolName, args, authToken);
-      }
-      throw new Error(`MCP call failed: HTTP ${response.status}`);
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(`${this.serviceName}/${toolName} timed out after 40 s`),
+      40000,
+    );
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}/mcp`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      throw new ApiError({
+        service: this.serviceName,
+        tool: toolName,
+        message: err instanceof Error ? err.message : 'Network request failed',
+        recovery: 'Check MCP connectivity and retry.',
+        cause: err,
+      });
+    } finally {
+      clearTimeout(timeout);
     }
 
-    const result = await parseSseResponse<T>(response);
+    if (!response.ok) {
+      // Session may have expired — re-initialize once, then retry
+      if ((response.status === 400 || response.status === 404) && !_retried) {
+        this.sessionId = null;
+        await this.initialize();
+        return this.callTool(toolName, args, authToken, true);
+      }
+      if (response.status === 401 || response.status === 403) {
+        throw new ApiError({
+          service: this.serviceName,
+          tool: toolName,
+          statusCode: response.status,
+          message: 'Unauthorized or forbidden',
+          recovery: defaultRecoveryHint(response.status),
+        });
+      }
+      throw new ApiError({
+        service: this.serviceName,
+        tool: toolName,
+        statusCode: response.status,
+        message: 'MCP call failed',
+        recovery: defaultRecoveryHint(response.status),
+      });
+    }
+
+    let result: JsonRpcResponse<T>;
+    try {
+      result = await parseSseResponse<T>(response);
+    } catch (err) {
+      throw new ApiError({
+        service: this.serviceName,
+        tool: toolName,
+        message: err instanceof Error ? err.message : 'Failed to parse MCP response',
+        recovery: 'Check MCP logs for malformed SSE output.',
+        cause: err,
+      });
+    }
     if (result.error) {
-      throw new Error(`MCP error: ${result.error.message}`);
+      throw new ApiError({
+        service: this.serviceName,
+        tool: toolName,
+        code: result.error.code,
+        message: result.error.message,
+        recovery: defaultRecoveryHint(),
+      });
     }
 
     return result.result as T;
@@ -208,11 +348,20 @@ configStore.subscribe(() => {
 
 // Get MCP client for a service
 export function getMcpClient(serviceName: string): McpClient {
-  const client = mcpClients[serviceName];
-  if (!client) {
-    throw new Error(`Unknown MCP service: ${serviceName}`);
+  switch (serviceName) {
+    case 'gofr-iq':
+      return mcpClients['gofr-iq'];
+    case 'gofr-doc':
+      return mcpClients['gofr-doc'];
+    case 'gofr-plot':
+      return mcpClients['gofr-plot'];
+    case 'gofr-np':
+      return mcpClients['gofr-np'];
+    case 'gofr-dig':
+      return mcpClients['gofr-dig'];
+    default:
+      throw new Error(`Unknown MCP service: ${serviceName}`);
   }
-  return client;
 }
 
 interface HealthData {
@@ -275,25 +424,92 @@ export const api = {
     port: configStore.getMcpPort('gofr-iq'),
   }),
 
+  // GOFR-DIG Health Check (ping)
+  digPing: async (authToken?: string): Promise<DigPingResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = {};
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('ping', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'ping');
+    return parseToolText<DigPingResponse>('gofr-dig', 'ping', textContent);
+  },
+
+  // Configure anti-detection for GOFR-DIG
+  digSetAntiDetection: async (
+    authToken: string | undefined,
+    settings: AntiDetectionConfig
+  ): Promise<AntiDetectionResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { ...settings };
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('set_antidetection', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'set_antidetection');
+    return parseToolText<AntiDetectionResponse>('gofr-dig', 'set_antidetection', textContent);
+  },
+
+  // Analyze page structure
+  digGetStructure: async (
+    authToken: string | undefined,
+    url: string,
+    options: StructureOptions = {}
+  ): Promise<PageStructureResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { url, ...options };
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('get_structure', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'get_structure');
+    return parseToolText<PageStructureResponse>('gofr-dig', 'get_structure', textContent);
+  },
+
+  // Fetch and extract content
+  digGetContent: async (
+    authToken: string | undefined,
+    url: string,
+    options: ContentOptions = {}
+  ): Promise<ContentResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { url, ...options };
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('get_content', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'get_content');
+    return parseToolText<ContentResponse>('gofr-dig', 'get_content', textContent);
+  },
+
+  // Get session metadata
+  digGetSessionInfo: async (
+    authToken: string | undefined,
+    sessionId: string
+  ): Promise<SessionInfoResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { session_id: sessionId };
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('get_session_info', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'get_session_info');
+    return parseToolText<SessionInfoResponse>('gofr-dig', 'get_session_info', textContent);
+  },
+
+  // Get a session chunk
+  digGetSessionChunk: async (
+    authToken: string | undefined,
+    sessionId: string,
+    chunkIndex: number
+  ): Promise<SessionChunkResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { session_id: sessionId, chunk_index: chunkIndex };
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('get_session_chunk', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'get_session_chunk');
+    return parseToolText<SessionChunkResponse>('gofr-dig', 'get_session_chunk', textContent);
+  },
+
   // List sources from GOFR-IQ
-  listSources: async (authToken: string) => {
+  listSources: async (authToken: string): Promise<{ sources: Source[] }> => {
     const client = getMcpClient('gofr-iq');
     const result = await client.callTool<HealthCheckResult>('list_sources', {
       auth_tokens: [authToken],
     });
-
-    // Parse the text content from MCP response
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      return { sources: [] };
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      return parsed.data || parsed;
-    } catch {
-      return { sources: [] };
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'list_sources');
+    return parseToolText('gofr-iq', 'list_sources', textContent) as { sources: Source[] };
   },
 
   // Ingest document into GOFR-IQ
@@ -304,7 +520,7 @@ export const api = {
     sourceGuid: string,
     language = 'en',
     metadata: Record<string, unknown> = {}
-  ) => {
+  ): Promise<IngestResult> => {
     const client = getMcpClient('gofr-iq');
     const result = await client.callTool<HealthCheckResult>(
       'ingest_document',
@@ -317,23 +533,13 @@ export const api = {
         auth_tokens: [authToken],
       }
     );
-
-    // Parse the text content from MCP response
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from ingest');
-    }
-
-    const parsed = JSON.parse(textContent);
-    if (parsed.status === 'error') {
-      throw new Error(parsed.message || 'Ingest failed');
-    }
-    return parsed.data || parsed;
+    const textContent = getTextContent(result, 'gofr-iq', 'ingest_document');
+    return parseToolText('gofr-iq', 'ingest_document', textContent) as IngestResult;
   },
 
   // List instruments by querying documents and extracting mentioned companies
   // Uses query_documents to discover instruments from document content
-  listInstruments: async (authToken: string) => {
+  listInstruments: async (authToken: string): Promise<{ instruments: Instrument[] }> => {
     const client = getMcpClient('gofr-iq');
     
     // Query documents with a broad search to find mentioned companies
@@ -343,19 +549,14 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      return { instruments: [] };
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'query_documents');
 
     try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        console.warn('query_documents error:', parsed.message);
-        return { instruments: [] };
-      }
-      
-      const data = parsed.data || parsed;
+      const data = parseToolText<{ results?: Array<{ title?: string }> }>(
+        'gofr-iq',
+        'query_documents',
+        textContent
+      );
       const documents = data.results || [];
       
       // Extract unique company tickers from document titles
@@ -363,31 +564,31 @@ export const api = {
       const instrumentMap = new Map<string, { ticker: string; name: string; sector?: string; instrument_type?: string }>();
       
       // Known ticker mapping from titles to tickers
-      const titleToTicker: Record<string, string> = {
-        'LuxeBrands': 'LUXE',
-        'Quantum Compute': 'QNTM',
-        'OmniCorp Global': 'OMNI',
-        'HeavyTrucks Inc.': 'TRUCK',
-        'HeavyTrucks': 'TRUCK',
-        'PROP': 'PROP',
-        'GeneSys': 'GENE',
-        'EcoPower Systems': 'ECO',
-        'Vitality Pharma': 'VP',
-        'STR': 'STR',
-        'GigaTech': 'GTX',
-        'GigaTech Inc.': 'GTX',
-        'Nexus Software': 'NXS',
-        'BankOne': 'BANKO',
-        'BlockChain Verify': 'BLK',
-        'FinCorp': 'FIN',
-      };
+      const titleToTicker = new Map<string, string>([
+        ['LuxeBrands', 'LUXE'],
+        ['Quantum Compute', 'QNTM'],
+        ['OmniCorp Global', 'OMNI'],
+        ['HeavyTrucks Inc.', 'TRUCK'],
+        ['HeavyTrucks', 'TRUCK'],
+        ['PROP', 'PROP'],
+        ['GeneSys', 'GENE'],
+        ['EcoPower Systems', 'ECO'],
+        ['Vitality Pharma', 'VP'],
+        ['STR', 'STR'],
+        ['GigaTech', 'GTX'],
+        ['GigaTech Inc.', 'GTX'],
+        ['Nexus Software', 'NXS'],
+        ['BankOne', 'BANKO'],
+        ['BlockChain Verify', 'BLK'],
+        ['FinCorp', 'FIN'],
+      ]);
       
       for (const doc of documents) {
         // Extract company from title pattern "Update regarding [Company]"
         const titleMatch = doc.title?.match(/Update regarding (.+?)[\n\s]*$/i);
         if (titleMatch) {
           const companyName = titleMatch[1].trim();
-          const ticker = titleToTicker[companyName] || companyName;
+          const ticker = titleToTicker.get(companyName) || companyName;
           
           if (!instrumentMap.has(ticker)) {
             instrumentMap.set(ticker, {
@@ -399,14 +600,15 @@ export const api = {
         }
       }
       
-      return { instruments: Array.from(instrumentMap.values()) };
-    } catch {
+      return { instruments: Array.from(instrumentMap.values()) as Instrument[] };
+    } catch (err) {
+      console.warn('query_documents parse error:', err);
       return { instruments: [] };
     }
   },
 
   // Get market context for a specific ticker
-  getMarketContext: async (authToken: string, ticker: string) => {
+  getMarketContext: async (authToken: string, ticker: string): Promise<MarketContextResponse> => {
     const client = getMcpClient('gofr-iq');
     const result = await client.callTool<HealthCheckResult>('get_market_context', {
       ticker,
@@ -416,21 +618,16 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      return parsed.data || parsed;
-    } catch {
-      return null;
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'get_market_context');
+    return parseToolText<MarketContextResponse>('gofr-iq', 'get_market_context', textContent);
   },
 
   // List clients for a given token group
-  listClients: async (authToken: string, clientType?: string, limit?: number) => {
+  listClients: async (
+    authToken: string,
+    clientType?: string,
+    limit?: number
+  ): Promise<{ clients: ClientSummary[] }> => {
     const client = getMcpClient('gofr-iq');
     
     const args: Record<string, unknown> = {
@@ -445,38 +642,36 @@ export const api = {
     }
 
     const result = await client.callTool<HealthCheckResult>('list_clients', args);
+    const textContent = getTextContent(result, 'gofr-iq', 'list_clients');
+    const data = parseToolText<{ clients?: Array<Record<string, unknown>> }>(
+      'gofr-iq',
+      'list_clients',
+      textContent
+    );
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      return { clients: [] };
-    }
+    const clients = (data.clients ?? []).map((c) => {
+      const guid = typeof c.client_guid === 'string'
+        ? c.client_guid
+        : typeof c.guid === 'string'
+          ? c.guid
+          : '';
+      return {
+        guid,
+        client_guid: guid,
+        name: typeof c.name === 'string' ? c.name : 'Unknown',
+        client_type: typeof c.client_type === 'string' ? c.client_type : null,
+        group_guid: typeof c.group_guid === 'string' ? c.group_guid : undefined,
+        created_at: typeof c.created_at === 'string' ? c.created_at : undefined,
+        portfolio_guid: typeof c.portfolio_guid === 'string' ? c.portfolio_guid : undefined,
+        watchlist_guid: typeof c.watchlist_guid === 'string' ? c.watchlist_guid : undefined,
+      } as ClientSummary;
+    });
 
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to list clients');
-      }
-      const data = parsed.data || parsed;
-      
-      // Map client_guid to guid for consistency
-      if (data.clients && Array.isArray(data.clients)) {
-        data.clients = data.clients.map((c: any) => ({
-          ...c,
-          guid: c.client_guid || c.guid,
-        }));
-      }
-      
-      return data;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      return { clients: [] };
-    }
+    return { clients };
   },
 
   // Get client profile details
-  getClientProfile: async (authToken: string, clientGuid: string) => {
+  getClientProfile: async (authToken: string, clientGuid: string): Promise<ClientProfileResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('get_client_profile', {
@@ -484,27 +679,12 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from get_client_profile');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to get client profile');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse client profile response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'get_client_profile');
+    return parseToolText<ClientProfileResponse>('gofr-iq', 'get_client_profile', textContent);
   },
 
   // Get client profile completeness score
-  getClientProfileScore: async (authToken: string, clientGuid: string) => {
+  getClientProfileScore: async (authToken: string, clientGuid: string): Promise<ProfileScoreResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('get_client_profile_score', {
@@ -512,23 +692,8 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from get_client_profile_score');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to get profile score');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse profile score response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'get_client_profile_score');
+    return parseToolText<ProfileScoreResponse>('gofr-iq', 'get_client_profile_score', textContent);
   },
 
   // Update client profile (partial update - only send changed fields)
@@ -545,7 +710,7 @@ export const api = {
       mandate_text?: string;
       restrictions?: ClientRestrictions;
     }
-  ) => {
+  ): Promise<UpdateProfileResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('update_client_profile', {
@@ -554,26 +719,8 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from update_client_profile');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        // Include error_code if available for better error handling
-        const error: any = new Error(parsed.message || 'Failed to update profile');
-        error.code = parsed.error_code;
-        throw error;
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse update profile response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'update_client_profile');
+    return parseToolText<UpdateProfileResponse>('gofr-iq', 'update_client_profile', textContent);
   },
 
   // Create a new client
@@ -591,7 +738,7 @@ export const api = {
       mandate_text?: string;
       restrictions?: ClientRestrictions;
     }
-  ) => {
+  ): Promise<CreateClientResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('create_client', {
@@ -599,27 +746,12 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from create_client');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to create client');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse create client response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'create_client');
+    return parseToolText<CreateClientResponse>('gofr-iq', 'create_client', textContent);
   },
 
   // Get full document by GUID
-  getDocument: async (authToken: string, documentGuid: string) => {
+  getDocument: async (authToken: string, documentGuid: string): Promise<DocumentResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('get_document', {
@@ -627,37 +759,22 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from get_document');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to get document');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse document response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'get_document');
+    return parseToolText<DocumentResponse>('gofr-iq', 'get_document', textContent);
   },
 
   // Get client news feed using get_top_client_news
   getClientFeed: async (
     authToken: string,
     clientGuid: string,
-    limit: number = 10,
+    limit: number = 3,
     minImpactScore: number = 0
-  ) => {
+  ): Promise<ClientFeedResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('get_top_client_news', {
       client_guid: clientGuid,
-      limit: Math.min(limit, 10), // Max 10 per tool spec
+      limit: Math.min(limit, 3), // Cap at 3 — each article requires an LLM call server-side
       time_window_hours: 24,
       min_impact_score: minImpactScore,
       include_portfolio: true,
@@ -666,23 +783,8 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from get_client_feed');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to get client news');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse client news response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'get_top_client_news');
+    return parseToolText<ClientFeedResponse>('gofr-iq', 'get_top_client_news', textContent);
   },
 
   // Add to portfolio
@@ -693,7 +795,7 @@ export const api = {
     weight: number,
     shares?: number,
     avgCost?: number
-  ) => {
+  ): Promise<PortfolioUpdateResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const params: Record<string, unknown> = {
@@ -708,21 +810,8 @@ export const api = {
     
     const result = await client.callTool<HealthCheckResult>('add_to_portfolio', params);
     
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from add_to_portfolio');
-    }
-    
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to add to portfolio');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) throw err;
-      throw new Error('Failed to parse add_to_portfolio response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'add_to_portfolio');
+    return parseToolText<PortfolioUpdateResponse>('gofr-iq', 'add_to_portfolio', textContent);
   },
 
   // Remove from portfolio
@@ -730,7 +819,7 @@ export const api = {
     authToken: string,
     clientGuid: string,
     ticker: string
-  ) => {
+  ): Promise<PortfolioUpdateResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('remove_from_portfolio', {
@@ -739,25 +828,12 @@ export const api = {
       auth_tokens: [authToken],
     });
     
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from remove_from_portfolio');
-    }
-    
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to remove from portfolio');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) throw err;
-      throw new Error('Failed to parse remove_from_portfolio response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'remove_from_portfolio');
+    return parseToolText<PortfolioUpdateResponse>('gofr-iq', 'remove_from_portfolio', textContent);
   },
 
   // Get portfolio holdings for a client
-  getPortfolioHoldings: async (authToken: string, clientGuid: string) => {
+  getPortfolioHoldings: async (authToken: string, clientGuid: string): Promise<PortfolioHoldingsResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('get_portfolio_holdings', {
@@ -765,35 +841,8 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from get_portfolio_holdings');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        // Extract meaningful error message
-        const errorMsg = parsed.message || 'Failed to get portfolio holdings';
-        // Check for Neo4j syntax errors
-        if (errorMsg.includes('NULLS')) {
-          throw new Error('Portfolio API error: Neo4j query syntax not supported in this version');
-        }
-        throw new Error(`Portfolio API error: ${errorMsg}`);
-      }
-      // Extract nested data if present
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof SyntaxError) {
-        // JSON parse error - response is not valid JSON
-        console.error('Non-JSON response from get_portfolio_holdings:', textContent);
-        throw new Error('Portfolio API returned invalid response format');
-      }
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse portfolio holdings response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'get_portfolio_holdings');
+    return parseToolText<PortfolioHoldingsResponse>('gofr-iq', 'get_portfolio_holdings', textContent);
   },
 
   // Add to watchlist
@@ -802,7 +851,7 @@ export const api = {
     clientGuid: string,
     ticker: string,
     alertThreshold?: number
-  ) => {
+  ): Promise<WatchlistUpdateResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const params: Record<string, unknown> = {
@@ -815,21 +864,8 @@ export const api = {
     
     const result = await client.callTool<HealthCheckResult>('add_to_watchlist', params);
     
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from add_to_watchlist');
-    }
-    
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to add to watchlist');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) throw err;
-      throw new Error('Failed to parse add_to_watchlist response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'add_to_watchlist');
+    return parseToolText<WatchlistUpdateResponse>('gofr-iq', 'add_to_watchlist', textContent);
   },
 
   // Remove from watchlist
@@ -837,7 +873,7 @@ export const api = {
     authToken: string,
     clientGuid: string,
     ticker: string
-  ) => {
+  ): Promise<WatchlistUpdateResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('remove_from_watchlist', {
@@ -846,25 +882,12 @@ export const api = {
       auth_tokens: [authToken],
     });
     
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from remove_from_watchlist');
-    }
-    
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        throw new Error(parsed.message || 'Failed to remove from watchlist');
-      }
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof Error) throw err;
-      throw new Error('Failed to parse remove_from_watchlist response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'remove_from_watchlist');
+    return parseToolText<WatchlistUpdateResponse>('gofr-iq', 'remove_from_watchlist', textContent);
   },
 
   // Get client watchlist
-  getClientWatchlist: async (authToken: string, clientGuid: string) => {
+  getClientWatchlist: async (authToken: string, clientGuid: string): Promise<WatchlistResponse> => {
     const client = getMcpClient('gofr-iq');
     
     const result = await client.callTool<HealthCheckResult>('get_watchlist_items', {
@@ -872,32 +895,8 @@ export const api = {
       auth_tokens: [authToken],
     });
 
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      throw new Error('No response from get_watchlist_items');
-    }
-
-    try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        const errorMsg = parsed.message || 'Failed to get client watchlist';
-        if (errorMsg.includes('NULLS')) {
-          throw new Error('Watchlist API error: Neo4j query syntax not supported in this version');
-        }
-        throw new Error(`Watchlist API error: ${errorMsg}`);
-      }
-      // Extract nested data if present
-      return parsed.data || parsed;
-    } catch (err) {
-      if (err instanceof SyntaxError) {
-        console.error('Non-JSON response from get_watchlist_items:', textContent);
-        throw new Error('Watchlist API returned invalid response format');
-      }
-      if (err instanceof Error) {
-        throw err;
-      }
-      throw new Error('Failed to parse client watchlist response');
-    }
+    const textContent = getTextContent(result, 'gofr-iq', 'get_watchlist_items');
+    return parseToolText<WatchlistResponse>('gofr-iq', 'get_watchlist_items', textContent);
   },
 
   // Get instrument news
@@ -906,31 +905,24 @@ export const api = {
     ticker: string,
     daysBack: number = 7,
     minImpactScore: number = 50
-  ) => {
+  ): Promise<InstrumentNewsResponse> => {
     const client = getMcpClient('gofr-iq');
+    const defaultResponse: InstrumentNewsResponse = { ticker, articles: [], total_found: 0 };
     
-    const result = await client.callTool<HealthCheckResult>('get_instrument_news', {
-      ticker,
-      days_back: daysBack,
-      min_impact_score: minImpactScore,
-      auth_tokens: [authToken],
-    });
-
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    if (!textContent) {
-      return { ticker, articles: [], total_found: 0 };
-    }
-
     try {
-      const parsed = JSON.parse(textContent);
-      if (parsed.status === 'error') {
-        console.warn(`get_instrument_news error for ${ticker}:`, parsed.message);
-        return { ticker, articles: [], total_found: 0 };
-      }
-      return parsed.data || parsed;
+      const result = await client.callTool<HealthCheckResult>('get_instrument_news', {
+        ticker,
+        days_back: daysBack,
+        min_impact_score: minImpactScore,
+        auth_tokens: [authToken],
+      });
+
+      const textContent = getTextContent(result, 'gofr-iq', 'get_instrument_news');
+      return parseToolText<InstrumentNewsResponse>('gofr-iq', 'get_instrument_news', textContent);
     } catch (err) {
-      console.warn(`Failed to parse news for ${ticker}:`, err);
-      return { ticker, articles: [], total_found: 0 };
+      // Graceful degradation: return empty result on error
+      console.warn(`get_instrument_news failed for ${ticker}:`, err instanceof Error ? err.message : err);
+      return defaultResponse;
     }
   },
 };

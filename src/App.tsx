@@ -9,6 +9,9 @@ import GofrIQClients from './pages/GofrIQClients';
 import GofrIQIngest from './pages/GofrIQIngest';
 import GofrIQHealthCheck from './pages/GofrIQHealthCheck';
 import Client360View from './pages/Client360View';
+import GofrDig from './pages/GofrDig';
+import GofrDigHealthCheck from './pages/GofrDigHealthCheck';
+import { MonitorHeart, Search, Article, Storage } from '@mui/icons-material';
 
 function App() {
   return (
@@ -44,6 +47,34 @@ function App() {
         <Route path="/gofr-iq/ingest" element={
           <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQIngest />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-dig" element={
+          <ServiceShell
+            serviceName="GOFR-DIG"
+            serviceRoute="/gofr-dig"
+            navItems={[
+              { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
+              { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
+              { path: '/gofr-dig', icon: <Article />, label: 'Content' },
+              { path: '/gofr-dig', icon: <Storage />, label: 'Session' },
+            ]}
+          >
+            <GofrDig />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-dig/health" element={
+          <ServiceShell
+            serviceName="GOFR-DIG"
+            serviceRoute="/gofr-dig"
+            navItems={[
+              { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
+              { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
+              { path: '/gofr-dig', icon: <Article />, label: 'Content' },
+              { path: '/gofr-dig', icon: <Storage />, label: 'Session' },
+            ]}
+          >
+            <GofrDigHealthCheck />
           </ServiceShell>
         } />
       </Routes>

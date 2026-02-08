@@ -29,16 +29,10 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
+import type { ClientSummary, ClientProfileResponse } from '../types/gofrIQ';
 
-interface Client {
-  client_guid: string;
-  name: string;
-  client_type: string | null;
-  group_guid?: string;
-  created_at?: string | null;
-}
-
-interface ClientProfile {
+/** Flattened view of client profile for display */
+interface FlattenedClientProfile {
   client_guid: string;
   name: string;
   client_type: string | null;
@@ -54,6 +48,32 @@ interface ClientProfile {
   created_at?: string | null;
 }
 
+/** Flatten nested ClientProfileResponse for UI display */
+function flattenProfileResponse(
+  response: ClientProfileResponse, 
+  clientGuid: string, 
+  selectedClient: ClientSummary | null
+): FlattenedClientProfile {
+  return {
+    client_guid: clientGuid,
+    name: response.name,
+    client_type: response.client_type,
+    // Extract from nested 'profile' object
+    mandate_type: response.profile?.mandate_type,
+    benchmark: response.profile?.benchmark,
+    horizon: response.profile?.horizon,
+    esg_constrained: response.profile?.esg_constrained,
+    // Extract from nested 'settings' object
+    alert_frequency: response.settings?.alert_frequency,
+    impact_threshold: response.settings?.impact_threshold,
+    // Use from selectedClient if available
+    portfolio_guid: selectedClient?.portfolio_guid,
+    watchlist_guid: selectedClient?.watchlist_guid,
+    group_guid: selectedClient?.group_guid,
+    created_at: selectedClient?.created_at,
+  };
+}
+
 export default function GofrIQClients() {
   const { tokens } = useConfig();
 
@@ -64,14 +84,14 @@ export default function GofrIQClients() {
   const [selectedTokenIndex, setSelectedTokenIndex] = useState<number>(-1);
 
   // Clients state
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Selected client for detail view
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
+  const [selectedClient, setSelectedClient] = useState<ClientSummary | null>(null);
+  const [clientProfile, setClientProfile] = useState<FlattenedClientProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -100,9 +120,9 @@ export default function GofrIQClients() {
       const clientList = data.clients || [];
       
       // Check for invalid GUIDs
-      const invalidClients = clientList.filter((c: Client) => !isValidGuid(c.client_guid));
+      const invalidClients = clientList.filter((c) => !isValidGuid(c.guid));
       if (invalidClients.length > 0) {
-        console.warn('Clients with invalid GUIDs:', invalidClients.map((c: Client) => c.client_guid));
+        console.warn('Clients with invalid GUIDs:', invalidClients.map((c) => c.guid));
         setError(`Warning: ${invalidClients.length} client(s) have invalid GUIDs and cannot be viewed in detail.`);
       }
       
@@ -120,14 +140,15 @@ export default function GofrIQClients() {
   }, [fetchClients]);
 
   // Load client profile when selected
-  const fetchClientProfile = useCallback(async (clientGuid: string) => {
+  const fetchClientProfile = useCallback(async (clientGuid: string, client: ClientSummary | null) => {
     if (!selectedToken?.token) return;
     
     setProfileLoading(true);
     setProfileError(null);
     try {
       const data = await api.getClientProfile(selectedToken.token, clientGuid);
-      setClientProfile(data);
+      // Flatten the nested response for UI display
+      setClientProfile(flattenProfileResponse(data, clientGuid, client));
     } catch (err) {
       setProfileError(err instanceof Error ? err.message : 'Failed to load client profile');
       setClientProfile(null);
@@ -137,18 +158,18 @@ export default function GofrIQClients() {
   }, [selectedToken?.token]);
 
   // Handle client selection
-  const handleClientClick = (client: Client) => {
+  const handleClientClick = (client: ClientSummary) => {
     setSelectedClient(client);
     setActiveTab(1);
     
     // Check for valid GUID before fetching profile
-    if (!isValidGuid(client.client_guid)) {
-      setProfileError(`Invalid client GUID format: "${client.client_guid}". Expected a valid UUID (e.g., 550e8400-e29b-41d4-a716-446655440000).`);
+    if (!isValidGuid(client.guid)) {
+      setProfileError(`Invalid client GUID format: "${client.guid}". Expected a valid UUID (e.g., 550e8400-e29b-41d4-a716-446655440000).`);
       setClientProfile(null);
       return;
     }
     
-    fetchClientProfile(client.client_guid);
+    fetchClientProfile(client.guid, client);
   };
 
   // Handle back to list

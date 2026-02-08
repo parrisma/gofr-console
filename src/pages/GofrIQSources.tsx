@@ -14,26 +14,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
-
-interface Source {
-  source_guid: string;
-  name: string;
-  type: string;
-  region: string | null;
-  languages: string[];
-  trust_level: string;
-  active: boolean;
-}
-
-interface Instrument {
-  ticker: string;
-  name: string;
-  instrument_type: string;
-  sector?: string;
-  exchange?: string;
-  currency?: string;
-  company?: string;
-}
+import type { Source, Instrument } from '../types/gofrIQ';
 
 export default function GofrIQSources() {
   const { tokens } = useConfig();
