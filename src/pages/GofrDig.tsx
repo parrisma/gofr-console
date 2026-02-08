@@ -17,7 +17,10 @@ import {
   Tabs,
   Tab,
   Chip,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useState } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
@@ -26,8 +29,6 @@ import type {
   AntiDetectionResponse,
   ContentResponse,
   PageStructureResponse,
-  SessionChunkResponse,
-  SessionInfoResponse,
   ProfileType,
 } from '../types/gofrDig';
 
@@ -57,6 +58,17 @@ function JsonBlock({ data }: { data: unknown }) {
     >
       {JSON.stringify(data, null, 2)}
     </Box>
+  );
+}
+
+/** Small info-icon tooltip placed inline next to a label or control. */
+function FieldTip({ tip }: { tip: string }) {
+  return (
+    <Tooltip title={tip} arrow placement="top" enterDelay={200}>
+      <IconButton size="small" tabIndex={-1} sx={{ ml: 0.5, p: 0.25, color: 'action.active' }}>
+        <InfoOutlinedIcon sx={{ fontSize: 16 }} />
+      </IconButton>
+    </Tooltip>
   );
 }
 
@@ -123,15 +135,6 @@ export default function GofrDig() {
   const [contentError, setContentError] = useState<string | null>(null);
   const [contentResponse, setContentResponse] = useState<ContentResponse | null>(null);
   const [contentTab, setContentTab] = useState(0);
-
-  // Session
-  const [sessionId, setSessionId] = useState('');
-  const [chunkIndex, setChunkIndex] = useState(0);
-  const [sessionInfoLoading, setSessionInfoLoading] = useState(false);
-  const [sessionChunkLoading, setSessionChunkLoading] = useState(false);
-  const [sessionError, setSessionError] = useState<string | null>(null);
-  const [sessionInfo, setSessionInfo] = useState<SessionInfoResponse | null>(null);
-  const [sessionChunk, setSessionChunk] = useState<SessionChunkResponse | null>(null);
 
   const requireToken = (): string | undefined => selectedToken?.token;
 
@@ -212,52 +215,11 @@ export default function GofrDig() {
         chunk_size: sessionMode ? normalizedChunkSize : undefined,
       });
       setContentResponse(response);
-      if (response.session_id) {
-        setSessionId(response.session_id);
-        if (response.total_chunks !== undefined) {
-          setChunkIndex(0);
-        }
-      }
     } catch (err) {
       setContentError(formatToolError('get_content', err, 'Failed to fetch content'));
       setContentResponse(null);
     } finally {
       setContentLoading(false);
-    }
-  };
-
-  const handleSessionInfo = async () => {
-    setSessionInfoLoading(true);
-    setSessionError(null);
-    try {
-      if (!sessionId.trim()) {
-        throw new Error('Session ID is required');
-      }
-      const response = await api.digGetSessionInfo(requireToken(), sessionId.trim());
-      setSessionInfo(response);
-    } catch (err) {
-      setSessionError(formatToolError('get_session_info', err, 'Failed to load session info'));
-      setSessionInfo(null);
-    } finally {
-      setSessionInfoLoading(false);
-    }
-  };
-
-  const handleSessionChunk = async () => {
-    setSessionChunkLoading(true);
-    setSessionError(null);
-    try {
-      if (!sessionId.trim()) {
-        throw new Error('Session ID is required');
-      }
-      const normalizedChunkIndex = toInteger(chunkIndex, 0, Number.MAX_SAFE_INTEGER);
-      const response = await api.digGetSessionChunk(requireToken(), sessionId.trim(), normalizedChunkIndex);
-      setSessionChunk(response);
-    } catch (err) {
-      setSessionError(formatToolError('get_session_chunk', err, 'Failed to load session chunk'));
-      setSessionChunk(null);
-    } finally {
-      setSessionChunkLoading(false);
     }
   };
 
@@ -271,38 +233,55 @@ export default function GofrDig() {
         Test and explore GOFR-DIG scraping features via MCP before automating workflows.
       </Typography>
 
+      <Alert severity="info" icon={false} sx={{ mt: 1, '& .MuiAlert-message': { width: '100%' } }}>
+        <Typography variant="subtitle2" sx={{ mb: 0.5 }}>How it works</Typography>
+        <Typography variant="body2" color="text.secondary">
+          <strong>① Pick a token</strong> — this determines which access group the scraped material belongs to.
+          <strong>② Set anti-detection</strong> — configure how requests appear to the target site.
+          <strong>③ Analyse structure</strong> — preview the page layout and find the right CSS selectors.
+          <strong>④ Extract content</strong> — pull the actual text, links, and metadata.
+          <strong>⑤ Review sessions</strong> — browse chunked results from large scrapes.
+          Each step builds on the previous one; start from the top and work down.
+        </Typography>
+      </Alert>
+
       {/* ① Token & Target */}
       <Card sx={{ mt: 3 }}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 1 }}>
             <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>①</Box>
-            Token & Target URL
+            Token & URL to Scrape
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Select an access token, then enter the URL you want to scrape.
           </Typography>
 
-          <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel id="dig-token-label">Token</InputLabel>
-            <Select
-              labelId="dig-token-label"
-              value={selectedTokenIndex}
-              label="Token"
-              onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
-            >
-              <MenuItem value={-1}>
-                <em>Select token</em>
-              </MenuItem>
-              {tokens.map((token, index) => (
-                <MenuItem key={token.name} value={index}>
-                  {token.name}
+          <Box display="flex" alignItems="flex-start" gap={1} sx={{ mb: 2 }}>
+            <FormControl fullWidth>
+              <InputLabel id="dig-token-label">Token</InputLabel>
+              <Select
+                labelId="dig-token-label"
+                value={selectedTokenIndex}
+                label="Token"
+                onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
+              >
+                <MenuItem value={-1}>
+                  <em>Select token</em>
                 </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+                {tokens.map((token, index) => (
+                  <MenuItem key={token.name} value={index}>
+                    {token.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Box sx={{ pt: 2 }}>
+              <FieldTip tip="The token determines which access group the scraped content is stored under. Only users with access to that group can view, search, or use the material. Choose the token that matches the intended audience." />
+            </Box>
+          </Box>
 
           <TextField
-            label="Target URL"
+            label="URL to scrape"
             placeholder="https://example.com"
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
@@ -349,24 +328,33 @@ export default function GofrDig() {
                 onChange={(e) => setRespectRobots(e.target.checked)}
               />
             }
-            label="Respect robots.txt"
+            label={
+              <Box display="inline-flex" alignItems="center">
+                Respect robots.txt
+                <FieldTip tip="Honour the site's robots.txt crawl rules. Disable only for sites you own or have explicit permission to scrape." />
+              </Box>
+            }
           />
 
           <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mt={2}>
-            <TextField
-              label="Rate limit delay (seconds)"
-              type="number"
-              value={rateLimitDelay}
-              onChange={(e) => setRateLimitDelay(Number(e.target.value))}
-              inputProps={{ min: 0, max: 60, step: 0.1 }}
-            />
-            <TextField
-              label="Max tokens"
-              type="number"
-              value={maxTokens}
-              onChange={(e) => setMaxTokens(Number(e.target.value))}
-              inputProps={{ min: 1000, max: 1000000, step: 1000 }}
-            />
+            <Tooltip title="Wait time between consecutive HTTP requests. 0 = no delay (aggressive). Increase to 2–5 s for rate-limited sites." arrow placement="top">
+              <TextField
+                label="Rate limit delay (seconds)"
+                type="number"
+                value={rateLimitDelay}
+                onChange={(e) => setRateLimitDelay(Number(e.target.value))}
+                inputProps={{ min: 0, max: 60, step: 0.1 }}
+              />
+            </Tooltip>
+            <Tooltip title="Maximum content size returned (~4 characters per token). Content exceeding this is truncated, deepest pages first. Range: 1 000 – 1 000 000." arrow placement="top">
+              <TextField
+                label="Max tokens"
+                type="number"
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(Number(e.target.value))}
+                inputProps={{ min: 1000, max: 1000000, step: 1000 }}
+              />
+            </Tooltip>
           </Box>
 
           {profile === 'custom' && (
@@ -420,23 +408,23 @@ export default function GofrDig() {
           <Box display="flex" flexWrap="wrap" gap={2}>
             <FormControlLabel
               control={<Switch checked={includeNav} onChange={(e) => setIncludeNav(e.target.checked)} />}
-              label="Navigation"
+              label={<Box display="inline-flex" alignItems="center">Navigation<FieldTip tip="Detect nav bars, menus, and sidebar navigation elements." /></Box>}
             />
             <FormControlLabel
               control={<Switch checked={includeInternalLinks} onChange={(e) => setIncludeInternalLinks(e.target.checked)} />}
-              label="Internal links"
+              label={<Box display="inline-flex" alignItems="center">Internal links<FieldTip tip="Links pointing to the same domain — useful for discovering crawlable pages." /></Box>}
             />
             <FormControlLabel
               control={<Switch checked={includeExternalLinks} onChange={(e) => setIncludeExternalLinks(e.target.checked)} />}
-              label="External links"
+              label={<Box display="inline-flex" alignItems="center">External links<FieldTip tip="Links pointing to other domains (outbound references)." /></Box>}
             />
             <FormControlLabel
               control={<Switch checked={includeForms} onChange={(e) => setIncludeForms(e.target.checked)} />}
-              label="Forms"
+              label={<Box display="inline-flex" alignItems="center">Forms<FieldTip tip="Extract form fields, actions, and methods — useful for understanding interactive elements." /></Box>}
             />
             <FormControlLabel
               control={<Switch checked={includeOutline} onChange={(e) => setIncludeOutline(e.target.checked)} />}
-              label="Outline"
+              label={<Box display="inline-flex" alignItems="center">Outline<FieldTip tip="Heading hierarchy (h1–h6) showing the document's logical structure." /></Box>}
             />
           </Box>
 
@@ -469,51 +457,67 @@ export default function GofrDig() {
           </Typography>
 
           <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2}>
-            <TextField
-              label="CSS selector (optional)"
-              value={contentSelector}
-              onChange={(e) => setContentSelector(e.target.value)}
-            />
-            <TextField
-              label="Depth"
-              type="number"
-              value={depth}
-              onChange={(e) => setDepth(Number(e.target.value))}
-              inputProps={{ min: 1, max: 3, step: 1 }}
-            />
-            <TextField
-              label="Max pages per level"
-              type="number"
-              value={maxPages}
-              onChange={(e) => setMaxPages(Number(e.target.value))}
-              inputProps={{ min: 1, max: 20, step: 1 }}
-            />
-            <TextField
-              label="Chunk size"
-              type="number"
-              value={chunkSize}
-              onChange={(e) => setChunkSize(Number(e.target.value))}
-              inputProps={{ min: 500, max: 10000, step: 100 }}
-              disabled={!sessionMode}
-            />
+            <Tooltip title='Narrow extraction to a CSS selector, e.g. "#content", "article", ".main-text". Leave blank to extract full page.' arrow placement="top">
+              <TextField
+                label="CSS selector (optional)"
+                value={contentSelector}
+                onChange={(e) => setContentSelector(e.target.value)}
+              />
+            </Tooltip>
+            <Tooltip title="1 = single page only. 2 = follow links one level (great for docs sites). 3 = two levels deep (slow, use sparingly)." arrow placement="top">
+              <TextField
+                label="Depth"
+                type="number"
+                value={depth}
+                onChange={(e) => setDepth(Number(e.target.value))}
+                inputProps={{ min: 1, max: 3, step: 1 }}
+              />
+            </Tooltip>
+            <Tooltip title="How many linked pages to follow at each depth level. Total pages ≈ max_pages ^ depth. Lower = faster." arrow placement="top">
+              <TextField
+                label="Max pages per level"
+                type="number"
+                value={maxPages}
+                onChange={(e) => setMaxPages(Number(e.target.value))}
+                inputProps={{ min: 1, max: 20, step: 1 }}
+              />
+            </Tooltip>
+            <Tooltip title="Characters per chunk when session mode is on. Smaller chunks = more granular retrieval. Only used with Session mode enabled." arrow placement="top">
+              <TextField
+                label="Chunk size"
+                type="number"
+                value={chunkSize}
+                onChange={(e) => setChunkSize(Number(e.target.value))}
+                inputProps={{ min: 500, max: 10000, step: 100 }}
+                disabled={!sessionMode}
+              />
+            </Tooltip>
           </Box>
 
           <Box display="flex" flexWrap="wrap" gap={2} mt={2}>
             <FormControlLabel
               control={<Switch checked={includeLinks} onChange={(e) => setIncludeLinks(e.target.checked)} />}
-              label="Include links"
+              label={<Box display="inline-flex" alignItems="center">Include links<FieldTip tip="Extract hyperlinks from the page. Disable for text-only extraction." /></Box>}
             />
             <FormControlLabel
               control={<Switch checked={includeImages} onChange={(e) => setIncludeImages(e.target.checked)} />}
-              label="Include images"
+              label={<Box display="inline-flex" alignItems="center">Include images<FieldTip tip="Extract image URLs and alt text. Enable for image-heavy pages." /></Box>}
             />
             <FormControlLabel
               control={<Switch checked={includeMeta} onChange={(e) => setIncludeMeta(e.target.checked)} />}
-              label="Include meta"
+              label={<Box display="inline-flex" alignItems="center">Include meta<FieldTip tip="Extract page metadata: description, keywords, Open Graph tags, etc." /></Box>}
             />
             <FormControlLabel
-              control={<Switch checked={sessionMode} onChange={(e) => setSessionMode(e.target.checked)} />}
-              label="Session mode"
+              control={<Switch checked={sessionMode} disabled={depth > 1} onChange={(e) => setSessionMode(e.target.checked)} />}
+              label={
+                <Box display="inline-flex" alignItems="center">
+                  Session mode
+                  <FieldTip tip={depth > 1
+                    ? "Session mode is only supported at depth 1. The server ignores session=true for multi-page crawls."
+                    : "Store content server-side in chunks instead of returning it all at once. Use for large pages — retrieve chunks later on the Sessions page."
+                  } />
+                </Box>
+              }
             />
           </Box>
 
@@ -527,7 +531,20 @@ export default function GofrDig() {
             Fetch Content
           </Button>
 
-          {contentResponse && (
+          {contentResponse && contentResponse.session_id ? (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>Session created</Typography>
+              <Typography variant="body2">
+                <strong>Session ID:</strong> {contentResponse.session_id}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Chunks:</strong> {contentResponse.total_chunks ?? '?'}
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Go to the <strong>Sessions</strong> page to browse the stored content.
+              </Typography>
+            </Alert>
+          ) : contentResponse ? (
             <Box mt={2}>
               <Tabs value={contentTab} onChange={(_, value) => setContentTab(value)}>
                 <Tab label="Text" />
@@ -547,81 +564,9 @@ export default function GofrDig() {
               {contentTab === 4 && <JsonBlock data={contentResponse.meta} />}
               {contentTab === 5 && <JsonBlock data={contentResponse.summary || contentResponse.pages} />}
             </Box>
-          )}
+          ) : null}
 
           <JsonBlock data={contentResponse} />
-        </CardContent>
-      </Card>
-
-      {/* ⑤ Session Viewer */}
-      <Card sx={{ mt: 3, mb: 4, opacity: selectedToken ? 1 : 0.5, pointerEvents: selectedToken ? 'auto' : 'none' }}>
-        <CardContent>
-          <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-            <Typography variant="h6">
-              <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>⑤</Box>
-              Session Viewer
-            </Typography>
-            {(sessionInfoLoading || sessionChunkLoading) && <CircularProgress size={20} />}
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Inspect chunked results from a session-mode scrape.
-          </Typography>
-
-          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2}>
-            <TextField
-              label="Session ID"
-              value={sessionId}
-              onChange={(e) => setSessionId(e.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Chunk index"
-              type="number"
-              value={chunkIndex}
-              onChange={(e) => setChunkIndex(Number(e.target.value))}
-              inputProps={{ min: 0 }}
-            />
-          </Box>
-
-          {sessionError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {sessionError}
-            </Alert>
-          )}
-
-          <Box display="flex" gap={2} mt={2} flexWrap="wrap">
-            <Button variant="contained" onClick={handleSessionInfo} disabled={sessionInfoLoading}>
-              Get Info
-            </Button>
-            <Button variant="outlined" onClick={handleSessionChunk} disabled={sessionChunkLoading}>
-              Get Chunk
-            </Button>
-          </Box>
-
-          {sessionInfo && (
-            <Box mt={2}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Session Summary
-              </Typography>
-              <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mt={1}>
-                <Typography variant="body2">Source: {sessionInfo.source_url}</Typography>
-                <Typography variant="body2">Chunks: {sessionInfo.total_chunks}</Typography>
-                <Typography variant="body2">Size: {sessionInfo.total_size_bytes} bytes</Typography>
-                <Typography variant="body2">Created: {sessionInfo.created_at}</Typography>
-              </Box>
-            </Box>
-          )}
-
-          {sessionChunk && (
-            <Box mt={2}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Chunk {sessionChunk.chunk_index}
-              </Typography>
-              <Box sx={{ whiteSpace: 'pre-wrap', mt: 1 }}>{sessionChunk.text}</Box>
-            </Box>
-          )}
-
-          <JsonBlock data={sessionInfo || sessionChunk} />
         </CardContent>
       </Card>
     </Box>

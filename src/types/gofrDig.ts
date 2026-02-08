@@ -107,8 +107,38 @@ export interface SessionInfoResponse {
 }
 
 export interface SessionChunkResponse {
+  success?: boolean;
+  session_id?: string;
+  chunk_index?: number;
+  url?: string;
+  title?: string;
+  text?: string;
+  content?: string;
+  language?: string;
+  total_chunks?: number;
+  is_last?: boolean;
+}
+
+export interface SessionSummary {
   session_id: string;
-  chunk_index: number;
-  text: string;
-  is_last: boolean;
+  url: string;
+  total_chunks: number;
+  total_size_bytes: number;
+  total_chars?: number;
+  chunk_size?: number;
+  group?: string | null;
+  created_at: string;
+}
+
+export interface ListSessionsResponse {
+  sessions: SessionSummary[];
+  total: number;
+}
+
+export interface SessionUrlsResponse {
+  success?: boolean;
+  session_id: string;
+  url?: string;
+  total_chunks: number;
+  chunk_urls: string[];
 }

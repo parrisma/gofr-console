@@ -11,7 +11,8 @@ import GofrIQHealthCheck from './pages/GofrIQHealthCheck';
 import Client360View from './pages/Client360View';
 import GofrDig from './pages/GofrDig';
 import GofrDigHealthCheck from './pages/GofrDigHealthCheck';
-import { MonitorHeart, Search, Article, Storage } from '@mui/icons-material';
+import GofrDigSessions from './pages/GofrDigSessions';
+import { MonitorHeart, Search, Storage } from '@mui/icons-material';
 
 function App() {
   return (
@@ -56,8 +57,7 @@ function App() {
             navItems={[
               { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
               { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
-              { path: '/gofr-dig', icon: <Article />, label: 'Content' },
-              { path: '/gofr-dig', icon: <Storage />, label: 'Session' },
+              { path: '/gofr-dig/sessions', icon: <Storage />, label: 'Sessions' },
             ]}
           >
             <GofrDig />
@@ -70,11 +70,23 @@ function App() {
             navItems={[
               { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
               { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
-              { path: '/gofr-dig', icon: <Article />, label: 'Content' },
-              { path: '/gofr-dig', icon: <Storage />, label: 'Session' },
+              { path: '/gofr-dig/sessions', icon: <Storage />, label: 'Sessions' },
             ]}
           >
             <GofrDigHealthCheck />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-dig/sessions" element={
+          <ServiceShell
+            serviceName="GOFR-DIG"
+            serviceRoute="/gofr-dig"
+            navItems={[
+              { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
+              { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
+              { path: '/gofr-dig/sessions', icon: <Storage />, label: 'Sessions' },
+            ]}
+          >
+            <GofrDigSessions />
           </ServiceShell>
         } />
       </Routes>

@@ -28,9 +28,11 @@ import type {
   ContentOptions,
   ContentResponse,
   DigPingResponse,
+  ListSessionsResponse,
   PageStructureResponse,
   SessionChunkResponse,
   SessionInfoResponse,
+  SessionUrlsResponse,
   StructureOptions,
 } from '../../types/gofrDig';
 
@@ -83,7 +85,19 @@ function parseToolText<T>(
   textContent: string
 ): T {
   try {
-    const parsed = JSON.parse(textContent);
+    let parsed = JSON.parse(textContent);
+    // Handle double-encoded JSON (some MCP tools return a JSON string inside the text field).
+    // The server often embeds literal newlines/tabs inside JSON string values which breaks
+    // JSON.parse, so we escape them before retrying.
+    if (typeof parsed === 'string') {
+      try { parsed = JSON.parse(parsed); } catch {
+        try {
+          const sanitised = (parsed as string).replace(/[\n\r\t]/g, m =>
+            m === '\n' ? '\\n' : m === '\r' ? '\\r' : '\\t');
+          parsed = JSON.parse(sanitised);
+        } catch { /* keep as-is */ }
+      }
+    }
     if (parsed.status === 'error') {
       throw new ApiError({
         service,
@@ -499,7 +513,37 @@ export const api = {
     if (authToken) params.auth_tokens = [authToken];
     const result = await client.callTool<HealthCheckResult>('get_session_chunk', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_session_chunk');
-    return parseToolText<SessionChunkResponse>('gofr-dig', 'get_session_chunk', textContent);
+    const parsed = parseToolText<SessionChunkResponse>('gofr-dig', 'get_session_chunk', textContent);
+    // DEBUG: log actual runtime type so we can diagnose empty-chunk issues
+    if (typeof parsed !== 'object' || parsed === null) {
+      console.warn('[digGetSessionChunk] parseToolText returned non-object:', typeof parsed, parsed);
+    }
+    return parsed;
+  },
+
+  // Get chunk URLs for a session (for automation / direct HTTP access)
+  digGetSessionUrls: async (
+    authToken: string | undefined,
+    sessionId: string,
+    baseUrl?: string
+  ): Promise<SessionUrlsResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { session_id: sessionId };
+    if (authToken) params.auth_tokens = [authToken];
+    if (baseUrl) params.base_url = baseUrl;
+    const result = await client.callTool<HealthCheckResult>('get_session_urls', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'get_session_urls');
+    return parseToolText<SessionUrlsResponse>('gofr-dig', 'get_session_urls', textContent);
+  },
+
+  // List all stored sessions
+  digListSessions: async (authToken?: string): Promise<ListSessionsResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = {};
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('list_sessions', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'list_sessions');
+    return parseToolText<ListSessionsResponse>('gofr-dig', 'list_sessions', textContent);
   },
 
   // List sources from GOFR-IQ

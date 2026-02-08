@@ -7,26 +7,12 @@ import {
   Alert,
   CircularProgress,
   Chip,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import { api } from '../services/api';
-import { useConfig } from '../hooks/useConfig';
-import type { JwtToken } from '../stores/configStore';
 
 export default function GofrDigHealthCheck() {
-  const { tokens } = useConfig();
-
-  const [selectedTokenIndex, setSelectedTokenIndex] = useState<number>(-1);
-  const selectedToken: JwtToken | null =
-    selectedTokenIndex >= 0 && selectedTokenIndex < tokens.length
-      ? tokens.at(selectedTokenIndex) ?? null
-      : null;
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [healthData, setHealthData] = useState<{ status: string; service: string } | null>(null);
@@ -36,7 +22,7 @@ export default function GofrDigHealthCheck() {
     setError(null);
     setHealthData(null);
     try {
-      const result = await api.digPing(selectedToken?.token);
+      const result = await api.digPing();
       setHealthData(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Health check failed';
@@ -58,25 +44,6 @@ export default function GofrDigHealthCheck() {
       </Typography>
 
       <Paper sx={{ p: 3, mb: 3 }}>
-        <FormControl fullWidth sx={{ mb: 3 }}>
-          <InputLabel id="dig-health-token-label">Token (optional)</InputLabel>
-          <Select
-            labelId="dig-health-token-label"
-            value={selectedTokenIndex}
-            label="Token (optional)"
-            onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
-          >
-            <MenuItem value={-1}>
-              <em>No token</em>
-            </MenuItem>
-            {tokens.map((token, index) => (
-              <MenuItem key={token.name} value={index}>
-                {token.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
         <Button
           variant="contained"
           onClick={runHealthCheck}
