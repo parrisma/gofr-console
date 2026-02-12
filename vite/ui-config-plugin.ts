@@ -3,7 +3,11 @@ import type { Plugin } from 'vite';
 import fs from 'fs';
 import path from 'path';
 
-const CONFIG_FILE = path.resolve(__dirname, '../config/ui-config.json');
+// Primary: data/config (runtime location, matches prod volume mount)
+// Fallback: config/ (repo default if data/ doesn't exist yet)
+const DATA_CONFIG = path.resolve(__dirname, '../data/config/ui-config.json');
+const REPO_CONFIG = path.resolve(__dirname, '../config/ui-config.json');
+const CONFIG_FILE = fs.existsSync(DATA_CONFIG) ? DATA_CONFIG : REPO_CONFIG;
 
 export function uiConfigPlugin(): Plugin {
   return {

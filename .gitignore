@@ -20,8 +20,17 @@ dist-ssr
 .env.production.local
 
 # Logs
-logs
+logs/
+!logs/.gitkeep
 *.log
+
+# Runtime data (config overrides, state — volume-mounted in prod)
+data/
+!data/.gitkeep
+!data/config/
+data/config/*
+!data/config/.gitkeep
+!data/config/ui-config.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

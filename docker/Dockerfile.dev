@@ -76,7 +76,8 @@ RUN set -eux; \
     usermod -aG docker gofr
 
 # Create project directory
-RUN mkdir -p /home/gofr/devroot/gofr-console \
+RUN mkdir -p /home/gofr/devroot/gofr-console/data/config \
+             /home/gofr/devroot/gofr-console/logs \
     && chown -R gofr:gofr /home/gofr/devroot
 
 # SSH config for git operations

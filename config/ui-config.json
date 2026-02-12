@@ -121,7 +121,7 @@
     {
       "name": "all",
       "groups": "all",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxNzhmZmIzMC05ZTAzLTQ2YWQtYWRhOC00NTJjM2Y2ZjM5NGUiLCJncm91cHMiOlsiZ3JvdXAtc2ltdWxhdGlvbiIsInB1YmxpYyIsImFkbWluIl0sImlhdCI6MTc3MDQ1ODI5NSwiZXhwIjoxNzczMDUwMjk1LCJuYmYiOjE3NzA0NTgyOTUsImF1ZCI6ImdvZnItYXBpIn0.5vHSTY-1xkAbOCi-3u74nYj0w7FklqQjTAK1_J7srew"
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwOTRhYmRlOC0xN2ZkLTRlZjYtYmU1YS03NmRmZWE0Y2IwNTMiLCJncm91cHMiOlsiZ3JvdXAtc2ltdWxhdGlvbiJdLCJpYXQiOjE3NzA2NzMyMjAsImV4cCI6MTgwMjIwOTIyMCwibmJmIjoxNzcwNjczMjIwLCJhdWQiOiJnb2ZyLWFwaSJ9.-T1DlS2XkuknL1gQ0rkg654Apc9Ird_ov0fOWd42AW4"
     },
     {
       "name": "admin",

@@ -28,10 +28,12 @@ import type {
   ContentOptions,
   ContentResponse,
   DigPingResponse,
+  GetSessionResponse,
   ListSessionsResponse,
   PageStructureResponse,
   SessionChunkResponse,
   SessionInfoResponse,
+  SessionUrlsJsonResponse,
   SessionUrlsResponse,
   StructureOptions,
 } from '../../types/gofrDig';
@@ -525,15 +527,44 @@ export const api = {
   digGetSessionUrls: async (
     authToken: string | undefined,
     sessionId: string,
-    baseUrl?: string
+    options?: { asJson?: boolean; baseUrl?: string }
   ): Promise<SessionUrlsResponse> => {
     const client = getMcpClient('gofr-dig');
-    const params: Record<string, unknown> = { session_id: sessionId };
+    const params: Record<string, unknown> = { session_id: sessionId, as_json: false };
     if (authToken) params.auth_tokens = [authToken];
-    if (baseUrl) params.base_url = baseUrl;
+    if (options?.asJson != null) params.as_json = options.asJson;
+    if (options?.baseUrl) params.base_url = options.baseUrl;
     const result = await client.callTool<HealthCheckResult>('get_session_urls', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_session_urls');
     return parseToolText<SessionUrlsResponse>('gofr-dig', 'get_session_urls', textContent);
+  },
+
+  // Get chunk references as JSON (for MCP-based automation: N8N, agents)
+  digGetSessionUrlsAsJson: async (
+    authToken: string | undefined,
+    sessionId: string
+  ): Promise<SessionUrlsJsonResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { session_id: sessionId, as_json: true };
+    if (authToken) params.auth_tokens = [authToken];
+    const result = await client.callTool<HealthCheckResult>('get_session_urls', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'get_session_urls');
+    return parseToolText<SessionUrlsJsonResponse>('gofr-dig', 'get_session_urls', textContent);
+  },
+
+  // Get full session content (server-side join of all chunks)
+  digGetSession: async (
+    authToken: string | undefined,
+    sessionId: string,
+    maxBytes?: number
+  ): Promise<GetSessionResponse> => {
+    const client = getMcpClient('gofr-dig');
+    const params: Record<string, unknown> = { session_id: sessionId };
+    if (authToken) params.auth_tokens = [authToken];
+    if (maxBytes != null) params.max_bytes = maxBytes;
+    const result = await client.callTool<HealthCheckResult>('get_session', params);
+    const textContent = getTextContent(result, 'gofr-dig', 'get_session');
+    return parseToolText<GetSessionResponse>('gofr-dig', 'get_session', textContent);
   },
 
   // List all stored sessions

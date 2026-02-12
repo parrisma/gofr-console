@@ -29,8 +29,12 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Standard GOFR user - all projects use same user
 GOFR_USER="gofr"
-GOFR_UID=1000
-GOFR_GID=1000
+IMAGE_UID=1000
+IMAGE_GID=1000
+
+# Detect host user's UID/GID for bind-mount ownership matching
+HOST_UID=$(id -u)
+HOST_GID=$(id -g)
 
 # Container and image names
 CONTAINER_NAME="gofr-console-dev"
@@ -66,7 +70,13 @@ done
 echo "======================================================================="
 echo "Starting GOFR-Console Development Container"
 echo "======================================================================="
-echo "User: ${GOFR_USER} (UID=${GOFR_UID}, GID=${GOFR_GID})"
+echo "Image user: ${GOFR_USER} (UID=${IMAGE_UID}, GID=${IMAGE_GID})"
+echo "Host user:  $(whoami) (UID=${HOST_UID}, GID=${HOST_GID})"
+if [ "$HOST_UID" != "$IMAGE_UID" ] || [ "$HOST_GID" != "$IMAGE_GID" ]; then
+    echo "  → overriding container user to ${HOST_UID}:${HOST_GID}"
+else
+    echo "  → UID/GID match, using image default"
+fi
 echo "Port: $DEV_PORT (Vite dev server)"
 echo "Network: $DOCKER_NETWORK"
 echo "======================================================================="
@@ -85,18 +95,26 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 fi
 
 # Get docker socket group ID for proper permissions
-DOCKER_GID=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo "999")
+DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo "999")
+
+# Build docker run args — conditionally add --user if host UID/GID differs
+RUN_ARGS=(
+    -d
+    --name "$CONTAINER_NAME"
+    --network "$DOCKER_NETWORK"
+    -p "${DEV_PORT}:3000"
+    -v "$PROJECT_ROOT:/home/gofr/devroot/gofr-console:rw"
+    -v /var/run/docker.sock:/var/run/docker.sock:rw
+    --group-add "${DOCKER_SOCK_GID}"
+    -e NODE_ENV=development
+)
+
+if [ "$HOST_UID" != "$IMAGE_UID" ] || [ "$HOST_GID" != "$IMAGE_GID" ]; then
+    RUN_ARGS+=(--user "${HOST_UID}:${HOST_GID}")
+fi
 
 # Run container with Docker socket mounted
-docker run -d \
-    --name "$CONTAINER_NAME" \
-    --network "$DOCKER_NETWORK" \
-    -p ${DEV_PORT}:3000 \
-    -v "$PROJECT_ROOT:/home/gofr/devroot/gofr-console:rw" \
-    -v /var/run/docker.sock:/var/run/docker.sock:rw \
-    --group-add ${DOCKER_GID} \
-    -e NODE_ENV=development \
-    "$IMAGE_NAME"
+docker run "${RUN_ARGS[@]}" "$IMAGE_NAME"
 
 echo ""
 echo "======================================================================="

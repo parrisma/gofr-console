@@ -135,10 +135,49 @@ export interface ListSessionsResponse {
   total: number;
 }
 
+/** Chunk reference object returned when as_json=true */
+export interface SessionChunkRef {
+  session_id: string;
+  chunk_index: number;
+}
+
+/** Response shape when as_json=false (default until now) — plain HTTP URLs */
 export interface SessionUrlsResponse {
   success?: boolean;
   session_id: string;
   url?: string;
   total_chunks: number;
   chunk_urls: string[];
+}
+
+/** Response shape when as_json=true — MCP-friendly chunk references */
+export interface SessionUrlsJsonResponse {
+  success?: boolean;
+  session_id: string;
+  url?: string;
+  total_chunks: number;
+  chunks: SessionChunkRef[];
+}
+
+/** Successful get_session response (all chunks joined server-side) */
+export interface GetSessionResponse {
+  success: boolean;
+  session_id: string;
+  url?: string;
+  total_chunks: number;
+  total_size_bytes: number;
+  content: string;
+}
+
+/** Error response when session content exceeds max_bytes */
+export interface GetSessionErrorResponse {
+  success: false;
+  error_code: 'CONTENT_TOO_LARGE';
+  message: string;
+  details: {
+    session_id: string;
+    total_size_bytes: number;
+    max_bytes: number;
+    total_chunks: number;
+  };
 }

@@ -1,0 +1,76 @@
+# =========================================================================
+# GOFR Console — Production Multi-stage Build
+#
+# Stage 1 (build):  Node 20 → pnpm install → vite build → /app/dist
+# Stage 2 (runtime): nginx:stable-alpine → static assets only
+#
+# The image serves pre-built static files through nginx.
+# MCP backend proxying is handled by the nginx config, NOT Vite.
+# =========================================================================
+
+# ── Stage 1: Build ────────────────────────────────────────────────────────
+FROM node:20-bookworm-slim AS build
+
+# pnpm via corepack (pinned version matches dev image)
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+
+WORKDIR /build
+
+# Install dependencies first (layer cache)
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod=false
+
+# Copy source & config
+COPY tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts ./
+COPY index.html ./
+COPY config/ config/
+COPY vite/ vite/
+COPY src/ src/
+COPY public/ public/
+
+# Build — produces /build/dist
+ARG VITE_BUILD_HASH=""
+ENV VITE_BUILD_HASH=${VITE_BUILD_HASH}
+RUN pnpm run build
+
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────
+FROM nginx:1.27-alpine AS runtime
+
+LABEL maintainer="GOFR Team"
+LABEL org.opencontainers.image.title="gofr-console"
+LABEL org.opencontainers.image.description="GOFR Console — Production Web UI"
+
+# Remove default nginx config & html
+RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*
+
+# Copy our nginx config (injected at compose level or baked in)
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/proxy_params.conf /etc/nginx/proxy_params.conf
+
+# Copy built assets from Stage 1
+COPY --from=build /build/dist /usr/share/nginx/html
+
+# Runtime config — can be overridden via volume mount at deploy time
+# In production compose, /data is a named volume; seed it with defaults.
+RUN mkdir -p /data/config /data/logs
+COPY config/ui-config.json /data/config/ui-config.json
+
+# Create cache/tmp dirs nginx needs (runs as non-root after this)
+RUN mkdir -p /var/cache/nginx /var/run /var/log/nginx \
+    && chown -R nginx:nginx /var/cache/nginx /var/run /var/log/nginx /usr/share/nginx/html /data \
+    && chmod -R go-w /var/cache/nginx /var/run /var/log/nginx /usr/share/nginx/html \
+    && find /usr/share/nginx/html -type d -exec chmod 0755 {} \; \
+    && find /usr/share/nginx/html -type f -exec chmod 0644 {} \;
+
+# Security: drop all capabilities, run as nginx user
+USER nginx
+
+EXPOSE 8080
+
+# nginx recommended stop signal for graceful shutdown
+STOPSIGNAL SIGQUIT
+
+HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget -qO /dev/null http://127.0.0.1:8080/health || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

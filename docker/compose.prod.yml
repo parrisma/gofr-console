@@ -1,0 +1,103 @@
+# =========================================================================
+# GOFR Console — Production Docker Compose
+#
+# Serves the pre-built SPA behind nginx with reverse-proxy to MCP backends.
+# Assumes MCP service stacks (gofr-iq, gofr-dig, etc.) are already running
+# on the shared gofr-net Docker network.
+#
+# Port Configuration:
+#   GOFR_CONSOLE_PORT  — host port mapped to nginx (default: 3100)
+#   GOFR_CONSOLE_BIND  — host bind address (default: 127.0.0.1)
+#
+# Usage (recommended):
+#   ./docker/start-prod.sh                     # build + start
+#   ./docker/start-prod.sh --port 8000         # custom host port
+#   ./docker/start-prod.sh --build             # force rebuild
+#   ./docker/start-prod.sh --down              # stop & remove
+#
+# Manual:
+#   docker compose -f docker/compose.prod.yml up -d
+#   docker compose -f docker/compose.prod.yml down
+# =========================================================================
+
+name: gofr-console
+
+services:
+  # ========================================================================
+  # Console Web UI — nginx serving static SPA + MCP reverse proxy
+  # ========================================================================
+  console:
+    image: gofr-console-prod:latest
+    container_name: gofr-console
+    hostname: gofr-console
+    restart: unless-stopped
+    init: true
+    user: "101:101" # nginx user in nginx:alpine
+    networks:
+      - gofr-net
+    ports:
+      - "${GOFR_CONSOLE_BIND:-127.0.0.1}:${GOFR_CONSOLE_PORT:-3100}:8080"
+    volumes:
+      # Runtime data — config overrides without rebuilding the image
+      - gofr-console-data:/data
+      # Logs — separate volume for independent lifecycle/rotation
+      - gofr-console-logs:/data/logs
+    environment:
+      - TZ=${TZ:-UTC}
+    # Security: read-only root filesystem where possible
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,nodev,size=32m,uid=101,gid=101
+      - /var/run:rw,noexec,nosuid,nodev,size=4m,uid=101,gid=101
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=101,gid=101
+    # Drop all capabilities, add only net_bind (not needed for 8080, but
+    # keeps the door open if you switch to 80 later)
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 2048
+    stop_signal: SIGQUIT
+    stop_grace_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+          pids: 200
+        reservations:
+          memory: 32M
+
+# =========================================================================
+# Networks
+# =========================================================================
+networks:
+  gofr-net:
+    name: gofr-net
+    external: true
+    # Shared across all GOFR production services.
+    # Create if missing: docker network create gofr-net
+
+# =========================================================================
+# Volumes
+# =========================================================================
+volumes:
+  gofr-console-data:
+    name: gofr-console-data
+    external: true
+  gofr-console-logs:
+    name: gofr-console-logs

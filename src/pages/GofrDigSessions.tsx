@@ -13,14 +13,19 @@ import {
   Tooltip,
   IconButton,
   Paper,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import DataObjectIcon from '@mui/icons-material/DataObject';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
 import type {
+  GetSessionResponse,
+  SessionChunkRef,
   SessionChunkResponse,
   SessionInfoResponse,
   SessionSummary,
@@ -69,12 +74,14 @@ export default function GofrDigSessions() {
   const [sessionInfo, setSessionInfo] = useState<SessionInfoResponse | null>(null);
   const [sessionChunk, setSessionChunk] = useState<SessionChunkResponse | null>(null);
 
-  // Merged "Get All" view
-  const [allChunksJson, setAllChunksJson] = useState<string | null>(null);
-  const [allChunksLoading, setAllChunksLoading] = useState(false);
+  // Merged "Get All" view — now uses server-side get_session
+  const [fullSession, setFullSession] = useState<GetSessionResponse | null>(null);
+  const [fullSessionLoading, setFullSessionLoading] = useState(false);
 
-  // Chunk URLs
+  // Chunk URLs / JSON chunks
   const [sessionUrls, setSessionUrls] = useState<SessionUrlsResponse | null>(null);
+  const [sessionChunkRefs, setSessionChunkRefs] = useState<SessionChunkRef[] | null>(null);
+  const [urlsMode, setUrlsMode] = useState<'urls' | 'json'>('urls');
 
   const requireToken = (): string | undefined => selectedToken?.token;
 
@@ -124,8 +131,9 @@ export default function GofrDigSessions() {
     setSessionInfo(null);
     setSessionChunk(null);
     setSessionUrls(null);
+    setSessionChunkRefs(null);
     setSessionError(null);
-    setAllChunksJson(null);
+    setFullSession(null);
   };
 
   const totalChunks = sessionInfo?.total_chunks ?? 0;
@@ -161,7 +169,7 @@ export default function GofrDigSessions() {
   const loadChunk = async (index: number) => {
     const clamped = Math.max(0, Math.min(index, totalChunks - 1));
     setChunkIndex(clamped);
-    setAllChunksJson(null); // switch back to single-chunk view
+    setFullSession(null); // switch back to single-chunk view
     setSessionChunkLoading(true);
     setSessionError(null);
     try {
@@ -175,53 +183,35 @@ export default function GofrDigSessions() {
     }
   };
 
-  /** Extract the raw string content from a chunk API response.
-   *  parseToolText may return an object (single-chunk session) or a string
-   *  (truncated chunk — the common case for multi-chunk sessions). */
-  const chunkToString = (raw: unknown): string => {
-    if (typeof raw === 'string') return raw;
-    if (typeof raw === 'object' && raw !== null) return JSON.stringify(raw);
-    return String(raw);
-  };
-
-  /** Fetch all chunks, concatenate their raw strings, parse the result, and format it. */
-  const loadAllChunks = async () => {
-    if (totalChunks <= 0 || totalChunks > 5) return;
-    setAllChunksLoading(true);
+  /** Fetch full session content using the server-side get_session tool. */
+  const loadFullSession = async () => {
+    if (!sessionId.trim()) return;
+    setFullSessionLoading(true);
     setSessionError(null);
     try {
-      const results = await Promise.all(
-        Array.from({ length: totalChunks }, (_, i) =>
-          api.digGetSessionChunk(requireToken(), sessionId.trim(), i)
-        )
-      );
-      // Chunks are raw string fragments of the serialized page JSON.
-      // Concatenate them (no separator) to reconstruct the complete JSON.
-      const joined = results.map(chunkToString).join('');
-
-      // Try to parse the reassembled JSON
-      let display: string;
-      try {
-        // Handle embedded literal newlines that break JSON.parse
-        let toParse = joined;
-        try {
-          JSON.parse(toParse);
-        } catch {
-          toParse = joined.replace(/[\n\r\t]/g, m =>
-            m === '\n' ? '\\n' : m === '\r' ? '\\r' : '\\t');
-        }
-        const parsed = JSON.parse(toParse);
-        display = JSON.stringify(parsed, null, 2);
-      } catch {
-        // If it still can't be parsed, show the raw concatenated text
-        display = joined;
-      }
-      setAllChunksJson(display);
+      const result = await api.digGetSession(requireToken(), sessionId.trim());
+      setFullSession(result);
     } catch (err) {
-      setSessionError(formatToolError('get_session_chunk', err, 'Failed to load all chunks'));
-      setAllChunksJson(null);
+      setSessionError(formatToolError('get_session', err, 'Failed to load full session'));
+      setFullSession(null);
     } finally {
-      setAllChunksLoading(false);
+      setFullSessionLoading(false);
+    }
+  };
+
+  /** Load chunk URLs or JSON chunk references depending on current mode. */
+  const loadSessionUrlsForMode = async (mode: 'urls' | 'json') => {
+    if (!sessionId.trim()) return;
+    try {
+      if (mode === 'json') {
+        const result = await api.digGetSessionUrlsAsJson(requireToken(), sessionId.trim());
+        setSessionChunkRefs(result.chunks ?? []);
+      } else {
+        const result = await api.digGetSessionUrls(requireToken(), sessionId.trim(), { asJson: false });
+        setSessionUrls(result);
+      }
+    } catch (err) {
+      setSessionError(formatToolError('get_session_urls', err, 'Failed to load session URLs'));
     }
   };
 
@@ -439,25 +429,23 @@ export default function GofrDigSessions() {
                   size="small"
                   fullWidth
                   onClick={() => loadChunk(chunkIndex)}
-                  disabled={sessionChunkLoading || allChunksLoading || !sessionId}
+                  disabled={sessionChunkLoading || fullSessionLoading || !sessionId}
                   startIcon={sessionChunkLoading ? <CircularProgress size={14} /> : undefined}
                   sx={{ mt: 1 }}
                 >
                   {sessionChunkLoading ? 'Loading…' : 'Get Chunk'}
                 </Button>
-                {totalChunks > 0 && totalChunks <= 5 && (
-                  <Button
-                    variant="contained"
-                    size="small"
-                    fullWidth
-                    onClick={loadAllChunks}
-                    disabled={allChunksLoading || sessionChunkLoading || !sessionId}
-                    startIcon={allChunksLoading ? <CircularProgress size={14} color="inherit" /> : undefined}
-                    sx={{ mt: 1 }}
-                  >
-                    {allChunksLoading ? 'Merging…' : `Get All (${totalChunks} chunks)`}
-                  </Button>
-                )}
+                <Button
+                  variant="contained"
+                  size="small"
+                  fullWidth
+                  onClick={loadFullSession}
+                  disabled={fullSessionLoading || sessionChunkLoading || !sessionId}
+                  startIcon={fullSessionLoading ? <CircularProgress size={14} color="inherit" /> : undefined}
+                  sx={{ mt: 1 }}
+                >
+                  {fullSessionLoading ? 'Loading…' : 'Get Full Session'}
+                </Button>
               </Paper>
 
               {/* Right panel — chunk content reader */}
@@ -485,15 +473,15 @@ export default function GofrDigSessions() {
                   }}
                 >
                   <Typography variant="subtitle2" color="text.secondary">
-                    {allChunksJson
-                      ? `All ${totalChunks} chunks (merged)`
+                    {fullSession
+                      ? `Full session (${fullSession.total_chunks} chunks, ${(fullSession.total_size_bytes / 1024).toFixed(1)} KB)`
                       : chunkData
                         ? `Chunk ${chunkIndex}${chunkData.is_last ? ' (last)' : totalChunks > 0 ? ` of ${totalChunks}` : ''}`
                         : 'Content Reader'}
                   </Typography>
-                  {(allChunksJson || chunkJson) && (
+                  {(fullSession?.content || chunkJson) && (
                     <Chip
-                      label={`${(allChunksJson || chunkJson || '').length.toLocaleString()} chars`}
+                      label={`${(fullSession?.content || chunkJson || '').length.toLocaleString()} chars`}
                       size="small"
                       variant="outlined"
                     />
@@ -516,12 +504,12 @@ export default function GofrDigSessions() {
                     color: sessionChunk ? 'text.primary' : 'text.disabled',
                   }}
                 >
-                  {sessionChunkLoading || allChunksLoading ? (
+                  {sessionChunkLoading || fullSessionLoading ? (
                     <Box display="flex" alignItems="center" justifyContent="center" height="100%">
                       <CircularProgress size={28} />
                     </Box>
-                  ) : allChunksJson ? (
-                    allChunksJson
+                  ) : fullSession ? (
+                    fullSession.content
                   ) : sessionChunk ? (
                     chunkJson || '(empty chunk)'
                   ) : (
@@ -536,80 +524,166 @@ export default function GofrDigSessions() {
         </CardContent>
       </Card>
 
-      {/* Chunk URLs — automation card */}
-      {sessionUrls && sessionUrls.chunk_urls?.length > 0 && (
+      {/* Chunk References — automation card (URLs or JSON) */}
+      {sessionInfo && (
         <Card sx={{ mt: 3, mb: 4 }}>
           <CardContent>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
               <Box display="flex" alignItems="center" gap={1}>
-                <LinkIcon color="primary" />
-                <Typography variant="h6">Chunk URLs</Typography>
-                <Chip label={`${sessionUrls.chunk_urls.length} URLs`} size="small" />
+                {urlsMode === 'urls' ? <LinkIcon color="primary" /> : <DataObjectIcon color="primary" />}
+                <Typography variant="h6">
+                  {urlsMode === 'urls' ? 'Chunk URLs' : 'Chunk References (JSON)'}
+                </Typography>
+                <Chip
+                  label={
+                    urlsMode === 'urls'
+                      ? `${sessionUrls?.chunk_urls?.length ?? 0} URLs`
+                      : `${sessionChunkRefs?.length ?? 0} refs`
+                  }
+                  size="small"
+                />
               </Box>
-              <Box display="flex" gap={1}>
-                <Tooltip title="Copy all URLs to clipboard (one per line)" arrow>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<ContentCopyIcon />}
-                    onClick={() => navigator.clipboard.writeText(sessionUrls.chunk_urls.join('\n'))}
-                  >
-                    Copy All
-                  </Button>
-                </Tooltip>
-              </Box>
-            </Box>
-            <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-              These are plain HTTP GET endpoints for each chunk — no MCP or auth required.
-              Use them in <strong>N8N</strong>, <strong>Open WebUI</strong>, <strong>Make</strong>, <strong>Zapier</strong>, or any HTTP client to iterate through scraped content.
-            </Alert>
-            <Box
-              sx={{
-                maxHeight: 280,
-                overflow: 'auto',
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-              }}
-            >
-              {sessionUrls.chunk_urls.map((url, idx) => (
-                <Box
-                  key={idx}
-                  sx={{
-                    px: 1.5,
-                    py: 0.75,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 1,
-                    bgcolor: idx === chunkIndex ? 'action.selected' : undefined,
-                    '&:hover': { bgcolor: 'action.hover' },
-                    borderBottom: idx < sessionUrls.chunk_urls.length - 1 ? '1px solid' : 'none',
-                    borderColor: 'divider',
-                    cursor: 'pointer',
+              <Box display="flex" gap={1} alignItems="center">
+                <ToggleButtonGroup
+                  size="small"
+                  exclusive
+                  value={urlsMode}
+                  onChange={(_e, val) => {
+                    if (!val) return;
+                    setUrlsMode(val);
+                    loadSessionUrlsForMode(val);
                   }}
-                  onClick={() => loadChunk(idx)}
                 >
-                  <Box display="flex" alignItems="center" gap={1} sx={{ overflow: 'hidden' }}>
-                    <Chip label={idx} size="small" variant="outlined" sx={{ minWidth: 32, fontFamily: 'monospace', fontSize: 11 }} />
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: 'monospace', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    >
-                      {url}
-                    </Typography>
-                  </Box>
-                  <Tooltip title="Copy this URL" arrow>
-                    <IconButton
+                  <ToggleButton value="urls">
+                    <Tooltip title="Plain HTTP URLs (Make, Zapier, HTTP clients)" arrow>
+                      <span>URLs</span>
+                    </Tooltip>
+                  </ToggleButton>
+                  <ToggleButton value="json">
+                    <Tooltip title="JSON chunk references (N8N, MCP agents)" arrow>
+                      <span>JSON</span>
+                    </Tooltip>
+                  </ToggleButton>
+                </ToggleButtonGroup>
+                {urlsMode === 'urls' && sessionUrls?.chunk_urls?.length ? (
+                  <Tooltip title="Copy all URLs to clipboard (one per line)" arrow>
+                    <Button
                       size="small"
-                      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(url); }}
+                      variant="outlined"
+                      startIcon={<ContentCopyIcon />}
+                      onClick={() => navigator.clipboard.writeText(sessionUrls.chunk_urls.join('\n'))}
                     >
-                      <ContentCopyIcon sx={{ fontSize: 14 }} />
-                    </IconButton>
+                      Copy All
+                    </Button>
                   </Tooltip>
-                </Box>
-              ))}
+                ) : urlsMode === 'json' && sessionChunkRefs?.length ? (
+                  <Tooltip title="Copy JSON array to clipboard" arrow>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<ContentCopyIcon />}
+                      onClick={() => navigator.clipboard.writeText(JSON.stringify(sessionChunkRefs, null, 2))}
+                    >
+                      Copy JSON
+                    </Button>
+                  </Tooltip>
+                ) : null}
+              </Box>
             </Box>
+
+            {urlsMode === 'urls' && (
+              <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+                Plain HTTP GET endpoints for each chunk — no MCP or auth required.
+                Use in <strong>Make</strong>, <strong>Zapier</strong>, <strong>Open WebUI</strong>, or any HTTP client.
+              </Alert>
+            )}
+            {urlsMode === 'json' && (
+              <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+                MCP-friendly chunk references — ideal for <strong>N8N</strong>, <strong>agents</strong>, and automation
+                that will call <code>get_session_chunk</code> next.
+              </Alert>
+            )}
+
+            {/* URLs list */}
+            {urlsMode === 'urls' && sessionUrls?.chunk_urls?.length ? (
+              <Box
+                sx={{
+                  maxHeight: 280,
+                  overflow: 'auto',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                }}
+              >
+                {sessionUrls.chunk_urls.map((url, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      px: 1.5,
+                      py: 0.75,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      bgcolor: idx === chunkIndex ? 'action.selected' : undefined,
+                      '&:hover': { bgcolor: 'action.hover' },
+                      borderBottom: idx < sessionUrls.chunk_urls.length - 1 ? '1px solid' : 'none',
+                      borderColor: 'divider',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => loadChunk(idx)}
+                  >
+                    <Box display="flex" alignItems="center" gap={1} sx={{ overflow: 'hidden' }}>
+                      <Chip label={idx} size="small" variant="outlined" sx={{ minWidth: 32, fontFamily: 'monospace', fontSize: 11 }} />
+                      <Typography
+                        variant="body2"
+                        sx={{ fontFamily: 'monospace', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        {url}
+                      </Typography>
+                    </Box>
+                    <Tooltip title="Copy this URL" arrow>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(url); }}
+                      >
+                        <ContentCopyIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                ))}
+              </Box>
+            ) : urlsMode === 'urls' && !sessionUrls?.chunk_urls?.length ? (
+              <Typography variant="body2" color="text.secondary">
+                Click <strong>URLs</strong> to load chunk URLs for this session.
+              </Typography>
+            ) : null}
+
+            {/* JSON references */}
+            {urlsMode === 'json' && sessionChunkRefs?.length ? (
+              <Box
+                component="pre"
+                sx={{
+                  maxHeight: 280,
+                  overflow: 'auto',
+                  p: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: 'background.paper',
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  lineHeight: 1.6,
+                  m: 0,
+                }}
+              >
+                {JSON.stringify(sessionChunkRefs, null, 2)}
+              </Box>
+            ) : urlsMode === 'json' && !sessionChunkRefs?.length ? (
+              <Typography variant="body2" color="text.secondary">
+                Click <strong>JSON</strong> to load chunk references for this session.
+              </Typography>
+            ) : null}
           </CardContent>
         </Card>
       )}
