@@ -191,7 +191,7 @@ class McpClient {
       },
     };
 
-    const response = await fetch(`${this.baseUrl}/mcp`, {
+    const response = await fetch(`${this.baseUrl}/mcp/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -222,7 +222,7 @@ class McpClient {
 
   // Send notification (no response expected)
   private async notify(method: string, params: Record<string, unknown>): Promise<void> {
-    await fetch(`${this.baseUrl}/mcp`, {
+    await fetch(`${this.baseUrl}/mcp/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -279,7 +279,7 @@ class McpClient {
     );
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/mcp`, {
+      response = await fetch(`${this.baseUrl}/mcp/`, {
         method: 'POST',
         headers,
         body: JSON.stringify(request),
