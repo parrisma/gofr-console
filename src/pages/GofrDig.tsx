@@ -19,11 +19,20 @@ import {
   Chip,
   Tooltip,
   IconButton,
+  Autocomplete,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
+import { logger } from '../services/logging';
 import type { JwtToken } from '../stores/configStore';
 import type {
   AntiDetectionResponse,
@@ -50,10 +59,15 @@ function JsonBlock({ data }: { data: unknown }) {
         p: 2,
         bgcolor: 'background.paper',
         borderRadius: 1,
-        overflow: 'auto',
+        overflowX: 'auto',
+        overflowY: 'auto',
+        maxWidth: '100%',
+        maxHeight: 600,
         fontSize: 12,
         border: '1px solid',
         borderColor: 'divider',
+        whiteSpace: 'pre',
+        wordBreak: 'keep-all',
       }}
     >
       {JSON.stringify(data, null, 2)}
@@ -72,16 +86,6 @@ function FieldTip({ tip }: { tip: string }) {
   );
 }
 
-function clampNumber(value: number, min: number, max: number): number {
-  if (Number.isNaN(value)) return min;
-  return Math.min(Math.max(value, min), max);
-}
-
-function toInteger(value: number, min: number, max: number): number {
-  const normalized = Math.trunc(value);
-  return clampNumber(normalized, min, max);
-}
-
 function formatToolError(tool: string, err: unknown, fallback: string): string {
   const message = err instanceof Error ? err.message : fallback;
   if (message.toLowerCase().includes(tool)) return message;
@@ -90,6 +94,16 @@ function formatToolError(tool: string, err: unknown, fallback: string): string {
 
 export default function GofrDig() {
   const { tokens } = useConfig();
+
+  useEffect(() => {
+    logger.info({
+      event: 'ui_page_view',
+      message: 'GOFR-DIG page viewed',
+      component: 'GofrDig',
+      operation: 'page_view',
+      result: 'success',
+    });
+  }, []);
 
   // Token selection
   const [selectedTokenIndex, setSelectedTokenIndex] = useState<number>(-1);
@@ -103,9 +117,8 @@ export default function GofrDig() {
 
   // Anti-detection
   const [profile, setProfile] = useState<ProfileType>('balanced');
-  const [respectRobots, setRespectRobots] = useState(true);
   const [rateLimitDelay, setRateLimitDelay] = useState(1.0);
-  const [maxTokens, setMaxTokens] = useState(100000);
+  const [maxResponseChars, setMaxResponseChars] = useState(400000);
   const [customHeadersText, setCustomHeadersText] = useState('{\n  "Accept-Language": "en-US"\n}');
   const [customUserAgent, setCustomUserAgent] = useState('');
   const [antiLoading, setAntiLoading] = useState(false);
@@ -113,11 +126,13 @@ export default function GofrDig() {
   const [antiResponse, setAntiResponse] = useState<AntiDetectionResponse | null>(null);
 
   // Structure
+  const [structureSelector, setStructureSelector] = useState('');
   const [includeNav, setIncludeNav] = useState(true);
   const [includeInternalLinks, setIncludeInternalLinks] = useState(true);
   const [includeExternalLinks, setIncludeExternalLinks] = useState(true);
   const [includeForms, setIncludeForms] = useState(true);
   const [includeOutline, setIncludeOutline] = useState(true);
+  const [structureTimeout, setStructureTimeout] = useState(60);
   const [structureLoading, setStructureLoading] = useState(false);
   const [structureError, setStructureError] = useState<string | null>(null);
   const [structureResponse, setStructureResponse] = useState<PageStructureResponse | null>(null);
@@ -129,8 +144,13 @@ export default function GofrDig() {
   const [includeLinks, setIncludeLinks] = useState(true);
   const [includeImages, setIncludeImages] = useState(false);
   const [includeMeta, setIncludeMeta] = useState(true);
+  const [filterNoise, setFilterNoise] = useState(true);
   const [sessionMode, setSessionMode] = useState(false);
   const [chunkSize, setChunkSize] = useState(4000);
+  const [maxBytes, setMaxBytes] = useState(5242880);
+  const [contentTimeout, setContentTimeout] = useState(60);
+  const [parseResults, setParseResults] = useState(true);
+  const [sourceProfileName, setSourceProfileName] = useState('');
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
   const [contentResponse, setContentResponse] = useState<ContentResponse | null>(null);
@@ -139,6 +159,16 @@ export default function GofrDig() {
   const requireToken = (): string | undefined => selectedToken?.token;
 
   const handleApplyAntiDetection = async () => {
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
+    logger.info({
+      event: 'ui_action_clicked',
+      message: 'Apply anti-detection clicked',
+      request_id: requestId,
+      component: 'GofrDig',
+      operation: 'set_antidetection',
+      data: { profile },
+    });
     setAntiLoading(true);
     setAntiError(null);
     try {
@@ -151,80 +181,158 @@ export default function GofrDig() {
         }
       }
 
-      const normalizedRateLimit = clampNumber(rateLimitDelay, 0, 60);
-      const normalizedMaxTokens = toInteger(maxTokens, 1000, 1000000);
-
       const response = await api.digSetAntiDetection(requireToken(), {
         profile,
-        respect_robots_txt: respectRobots,
-        rate_limit_delay: normalizedRateLimit,
-        max_tokens: normalizedMaxTokens,
+        rate_limit_delay: rateLimitDelay,
+        max_response_chars: maxResponseChars,
         custom_headers: customHeaders,
         custom_user_agent: profile === 'custom' ? customUserAgent || undefined : undefined,
       });
       setAntiResponse(response);
+      logger.info({
+        event: 'ui_form_submitted',
+        message: 'set_antidetection succeeded',
+        request_id: requestId,
+        component: 'GofrDig',
+        operation: 'set_antidetection',
+        result: 'success',
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } catch (err) {
       setAntiError(formatToolError('set_antidetection', err, 'Failed to apply anti-detection settings'));
       setAntiResponse(null);
+      logger.error({
+        event: 'ui_form_submitted',
+        message: 'set_antidetection failed',
+        request_id: requestId,
+        component: 'GofrDig',
+        operation: 'set_antidetection',
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { cause: err instanceof Error ? err.message : 'unknown' },
+      });
     } finally {
       setAntiLoading(false);
     }
   };
 
   const handleAnalyzeStructure = async () => {
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
+    logger.info({
+      event: 'ui_action_clicked',
+      message: 'Analyze structure clicked',
+      request_id: requestId,
+      component: 'GofrDig',
+      operation: 'get_structure',
+      data: { selector_present: Boolean(structureSelector.trim()) },
+    });
     setStructureLoading(true);
     setStructureError(null);
     try {
-      if (!targetUrl.trim()) {
+      if (!targetUrl) {
         throw new Error('URL is required');
       }
-      const response = await api.digGetStructure(requireToken(), targetUrl.trim(), {
+      const response = await api.digGetStructure(requireToken(), targetUrl, {
+        selector: structureSelector,
         include_navigation: includeNav,
         include_internal_links: includeInternalLinks,
         include_external_links: includeExternalLinks,
         include_forms: includeForms,
         include_outline: includeOutline,
+        timeout_seconds: structureTimeout,
       });
       setStructureResponse(response);
+      logger.info({
+        event: 'ui_form_submitted',
+        message: 'get_structure succeeded',
+        request_id: requestId,
+        component: 'GofrDig',
+        operation: 'get_structure',
+        result: 'success',
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } catch (err) {
       setStructureError(formatToolError('get_structure', err, 'Failed to analyze structure'));
       setStructureResponse(null);
+      logger.error({
+        event: 'ui_form_submitted',
+        message: 'get_structure failed',
+        request_id: requestId,
+        component: 'GofrDig',
+        operation: 'get_structure',
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { cause: err instanceof Error ? err.message : 'unknown' },
+      });
     } finally {
       setStructureLoading(false);
     }
   };
 
   const handleFetchContent = async () => {
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
+    logger.info({
+      event: 'ui_action_clicked',
+      message: 'Fetch content clicked',
+      request_id: requestId,
+      component: 'GofrDig',
+      operation: 'get_content',
+      data: { depth, filter_noise: filterNoise },
+    });
     setContentLoading(true);
     setContentError(null);
     try {
-      if (!targetUrl.trim()) {
+      if (!targetUrl) {
         throw new Error('URL is required');
       }
-      const normalizedDepth = toInteger(depth, 1, 3);
-      const normalizedMaxPages = toInteger(maxPages, 1, 20);
-      const normalizedChunkSize = toInteger(chunkSize, 500, 10000);
-      const response = await api.digGetContent(requireToken(), targetUrl.trim(), {
-        selector: contentSelector.trim() || undefined,
-        depth: normalizedDepth,
-        max_pages_per_level: normalizedMaxPages,
+      const response = await api.digGetContent(requireToken(), targetUrl, {
+        selector: contentSelector,
+        depth,
+        max_pages_per_level: maxPages,
         include_links: includeLinks,
         include_images: includeImages,
         include_meta: includeMeta,
+        filter_noise: filterNoise,
         session: sessionMode,
-        chunk_size: sessionMode ? normalizedChunkSize : undefined,
+        chunk_size: chunkSize,
+        max_bytes: maxBytes,
+        timeout_seconds: contentTimeout,
+        parse_results: parseResults,
+        source_profile_name: sourceProfileName || undefined,
       });
       setContentResponse(response);
+      logger.info({
+        event: 'ui_form_submitted',
+        message: 'get_content succeeded',
+        request_id: requestId,
+        component: 'GofrDig',
+        operation: 'get_content',
+        result: 'success',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { response_type: response.response_type ?? 'inline' },
+      });
     } catch (err) {
       setContentError(formatToolError('get_content', err, 'Failed to fetch content'));
       setContentResponse(null);
+      logger.error({
+        event: 'ui_form_submitted',
+        message: 'get_content failed',
+        request_id: requestId,
+        component: 'GofrDig',
+        operation: 'get_content',
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { cause: err instanceof Error ? err.message : 'unknown' },
+      });
     } finally {
       setContentLoading(false);
     }
   };
 
   return (
-    <Box>
+    <Box sx={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
       <Box display="flex" alignItems="center" gap={2} mb={2}>
         <Typography variant="h4">GOFR-DIG</Typography>
         <Chip label="MCP" size="small" />
@@ -321,22 +429,11 @@ export default function GofrDig() {
             </Select>
           </FormControl>
 
-          <FormControlLabel
-            control={
-              <Switch
-                checked={respectRobots}
-                onChange={(e) => setRespectRobots(e.target.checked)}
-              />
-            }
-            label={
-              <Box display="inline-flex" alignItems="center">
-                Respect robots.txt
-                <FieldTip tip="Honour the site's robots.txt crawl rules. Disable only for sites you own or have explicit permission to scrape." />
-              </Box>
-            }
-          />
+          <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+            <Typography variant="body2">robots.txt is always enforced — this cannot be disabled.</Typography>
+          </Alert>
 
-          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mt={2}>
+          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2}>
             <Tooltip title="Wait time between consecutive HTTP requests. 0 = no delay (aggressive). Increase to 2–5 s for rate-limited sites." arrow placement="top">
               <TextField
                 label="Rate limit delay (seconds)"
@@ -346,13 +443,13 @@ export default function GofrDig() {
                 inputProps={{ min: 0, max: 60, step: 0.1 }}
               />
             </Tooltip>
-            <Tooltip title="Maximum content size returned (~4 characters per token). Content exceeding this is truncated, deepest pages first. Range: 1 000 – 1 000 000." arrow placement="top">
+            <Tooltip title="Maximum content size returned (character count, not tokens). Content exceeding this is truncated. Range: 4 000 – 4 000 000. Default: 400 000." arrow placement="top">
               <TextField
-                label="Max tokens"
+                label="Max response chars"
                 type="number"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(Number(e.target.value))}
-                inputProps={{ min: 1000, max: 1000000, step: 1000 }}
+                value={maxResponseChars}
+                onChange={(e) => setMaxResponseChars(Number(e.target.value))}
+                inputProps={{ min: 4000, max: 4000000, step: 1000 }}
               />
             </Tooltip>
           </Box>
@@ -405,6 +502,25 @@ export default function GofrDig() {
             Analyse the page layout of <strong>{targetUrl || '(enter URL above)'}</strong> before extracting content.
           </Typography>
 
+          <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }} gap={2} mb={2}>
+            <Tooltip title='Scope structural analysis to a CSS selector, e.g. "#main", "article". Leave blank for full page.' arrow placement="top">
+              <TextField
+                label="CSS selector (optional)"
+                value={structureSelector}
+                onChange={(e) => setStructureSelector(e.target.value)}
+              />
+            </Tooltip>
+            <Tooltip title="Fetch timeout per URL in seconds. Default 60." arrow placement="top">
+              <TextField
+                label="Timeout (seconds)"
+                type="number"
+                value={structureTimeout}
+                onChange={(e) => setStructureTimeout(Number(e.target.value))}
+                inputProps={{ min: 1, max: 300, step: 1 }}
+              />
+            </Tooltip>
+          </Box>
+
           <Box display="flex" flexWrap="wrap" gap={2}>
             <FormControlLabel
               control={<Switch checked={includeNav} onChange={(e) => setIncludeNav(e.target.checked)} />}
@@ -438,13 +554,17 @@ export default function GofrDig() {
             Analyze Structure
           </Button>
 
+          {structureResponse?.language && (
+            <Chip label={`Language: ${structureResponse.language}`} size="small" sx={{ mt: 2, ml: 1 }} />
+          )}
+
           <JsonBlock data={structureResponse} />
         </CardContent>
       </Card>
 
       {/* ④ Content Extraction */}
-      <Card sx={{ mt: 3, opacity: selectedToken ? 1 : 0.5, pointerEvents: selectedToken ? 'auto' : 'none' }}>
-        <CardContent>
+      <Card sx={{ mt: 3, overflow: 'hidden', opacity: selectedToken ? 1 : 0.5, pointerEvents: selectedToken ? 'auto' : 'none' }}>
+        <CardContent sx={{ minWidth: 0 }}>
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Typography variant="h6">
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>④</Box>
@@ -482,14 +602,32 @@ export default function GofrDig() {
                 inputProps={{ min: 1, max: 20, step: 1 }}
               />
             </Tooltip>
-            <Tooltip title="Characters per chunk when session mode is on. Smaller chunks = more granular retrieval. Only used with Session mode enabled." arrow placement="top">
+            <Tooltip title="Characters per chunk when session mode is on. Smaller chunks = more granular retrieval. Recommended: 3000–8000. Only used with Session mode enabled." arrow placement="top">
               <TextField
                 label="Chunk size"
                 type="number"
                 value={chunkSize}
                 onChange={(e) => setChunkSize(Number(e.target.value))}
                 inputProps={{ min: 500, max: 10000, step: 100 }}
-                disabled={!sessionMode}
+                disabled={!sessionMode && depth <= 1}
+              />
+            </Tooltip>
+            <Tooltip title="Fetch timeout per URL in seconds. Default 60." arrow placement="top">
+              <TextField
+                label="Timeout (seconds)"
+                type="number"
+                value={contentTimeout}
+                onChange={(e) => setContentTimeout(Number(e.target.value))}
+                inputProps={{ min: 1, max: 300, step: 1 }}
+              />
+            </Tooltip>
+            <Tooltip title="Max inline response size in bytes. Default 5 MB (5242880). Returns CONTENT_TOO_LARGE if exceeded." arrow placement="top">
+              <TextField
+                label="Max bytes"
+                type="number"
+                value={maxBytes}
+                onChange={(e) => setMaxBytes(Number(e.target.value))}
+                inputProps={{ min: 1024, step: 1024 }}
               />
             </Tooltip>
           </Box>
@@ -508,12 +646,20 @@ export default function GofrDig() {
               label={<Box display="inline-flex" alignItems="center">Include meta<FieldTip tip="Extract page metadata: description, keywords, Open Graph tags, etc." /></Box>}
             />
             <FormControlLabel
-              control={<Switch checked={sessionMode} disabled={depth > 1} onChange={(e) => setSessionMode(e.target.checked)} />}
+              control={<Switch checked={filterNoise} onChange={(e) => setFilterNoise(e.target.checked)} />}
+              label={<Box display="inline-flex" alignItems="center">Filter noise<FieldTip tip="Remove boilerplate (nav, footer, ads) and keep only main content. Enabled by default." /></Box>}
+            />
+            <FormControlLabel
+              control={<Switch checked={parseResults} onChange={(e) => setParseResults(e.target.checked)} />}
+              label={<Box display="inline-flex" alignItems="center">Parse results<FieldTip tip="Run the deterministic news parser on crawl results. Returns structured stories with dedup, classification, and quality signals. Disable for raw crawl output." /></Box>}
+            />
+            <FormControlLabel
+              control={<Switch checked={sessionMode} onChange={(e) => setSessionMode(e.target.checked)} />}
               label={
                 <Box display="inline-flex" alignItems="center">
                   Session mode
                   <FieldTip tip={depth > 1
-                    ? "Session mode is only supported at depth 1. The server ignores session=true for multi-page crawls."
+                    ? "Session mode flag is sent exactly as selected. Note: server may still enforce session behavior for depth > 1."
                     : "Store content server-side in chunks instead of returning it all at once. Use for large pages — retrieve chunks later on the Sessions page."
                   } />
                 </Box>
@@ -521,17 +667,79 @@ export default function GofrDig() {
             />
           </Box>
 
+          {parseResults && (
+            <Box mt={2}>
+              <Autocomplete
+                freeSolo
+                options={['scmp', 'generic']}
+                value={sourceProfileName}
+                onInputChange={(_, value) => setSourceProfileName(value)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Source profile name (optional)"
+                    helperText='Parser profile for site-specific rules (e.g. "scmp"). Leave blank for generic fallback.'
+                    size="small"
+                  />
+                )}
+                sx={{ maxWidth: 400 }}
+              />
+            </Box>
+          )}
+
           {contentError && (
             <Alert severity="error" sx={{ mt: 2 }}>
               {contentError}
             </Alert>
           )}
 
-          <Button variant="contained" sx={{ mt: 2 }} onClick={handleFetchContent} disabled={contentLoading}>
-            Fetch Content
-          </Button>
+          <Box display="flex" alignItems="center" gap={2} mt={2}>
+            <Button variant="contained" onClick={handleFetchContent} disabled={contentLoading}>
+              Fetch Content
+            </Button>
+            <Tooltip
+              title={
+                <Box component="pre" sx={{ m: 0, fontSize: '0.75rem', maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+                  {JSON.stringify(
+                    {
+                      tool: 'get_content',
+                      arguments: {
+                        url: targetUrl || '(empty)',
+                        selector: contentSelector,
+                        depth,
+                        max_pages_per_level: maxPages,
+                        include_links: includeLinks,
+                        include_images: includeImages,
+                        include_meta: includeMeta,
+                        filter_noise: filterNoise,
+                        session: sessionMode,
+                        chunk_size: chunkSize,
+                        max_bytes: maxBytes,
+                        timeout_seconds: contentTimeout,
+                        parse_results: parseResults,
+                        source_profile_name: sourceProfileName || undefined,
+                      },
+                    },
+                    null,
+                    2
+                  )}
+                </Box>
+              }
+              placement="right"
+              arrow
+              slotProps={{
+                tooltip: {
+                  sx: { maxWidth: 480, bgcolor: 'grey.900', p: 1.5 },
+                },
+              }}
+            >
+              <IconButton size="small" color="info">
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
 
-          {contentResponse && contentResponse.session_id ? (
+          {contentResponse && (contentResponse.session_id || contentResponse.response_type === 'session') ? (
             <Alert severity="success" sx={{ mt: 2 }}>
               <Typography variant="subtitle2" gutterBottom>Session created</Typography>
               <Typography variant="body2">
@@ -545,28 +753,137 @@ export default function GofrDig() {
               </Typography>
             </Alert>
           ) : contentResponse ? (
-            <Box mt={2}>
-              <Tabs value={contentTab} onChange={(_, value) => setContentTab(value)}>
-                <Tab label="Text" />
+            <Box mt={2} sx={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+              {(contentResponse.crawl_depth != null || contentResponse.response_type) && (
+                <Box display="flex" gap={1} mb={1} flexWrap="wrap">
+                  {contentResponse.response_type && <Chip label={`Type: ${contentResponse.response_type}`} size="small" />}
+                  {contentResponse.crawl_depth != null && <Chip label={`Crawl depth: ${contentResponse.crawl_depth}`} size="small" />}
+                  {contentResponse.raw_summary && <Chip label={`Pages: ${contentResponse.raw_summary.total_pages} | Text: ${(contentResponse.raw_summary.total_text_length / 1024).toFixed(1)} KB`} size="small" />}
+                </Box>
+              )}
+              <Tabs value={contentTab} onChange={(_, value) => setContentTab(value)} variant="scrollable" scrollButtons="auto">
+                <Tab label={`Stories (${contentResponse.stories?.length ?? 0})`} disabled={!contentResponse.stories?.length} />
                 <Tab label="Headings" />
                 <Tab label="Links" />
-                <Tab label="Images" />
                 <Tab label="Meta" />
                 <Tab label="Summary" />
+                <Tab label="Feed Meta" disabled={!contentResponse.feed_meta} />
+                <Tab label="Text" />
+                <Tab label="Images" />
               </Tabs>
               <Divider sx={{ mb: 2 }} />
-              {contentTab === 0 && (
-                <Box sx={{ whiteSpace: 'pre-wrap' }}>{contentResponse.text || 'No text returned.'}</Box>
+              {contentTab === 0 && contentResponse.stories && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    {contentResponse.stories.length} stories extracted
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxWidth: '100%', overflowX: 'auto' }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Headline</TableCell>
+                          <TableCell>Section</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Published</TableCell>
+                          <TableCell>Author</TableCell>
+                          <TableCell>Confidence</TableCell>
+                          <TableCell>Snippet</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {contentResponse.stories.map((story) => (
+                          <TableRow key={story.story_id}>
+                            <TableCell sx={{ maxWidth: 300, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                              {story.headline}
+                              {story.subheadline && (
+                                <Typography variant="caption" display="block" color="text.secondary">
+                                  {story.subheadline}
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell>{story.section ?? '—'}</TableCell>
+                            <TableCell>
+                              <Chip label={story.content_type ?? 'news'} size="small" variant="outlined" />
+                            </TableCell>
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{story.published ?? story.published_raw ?? '—'}</TableCell>
+                            <TableCell>{story.author ?? '—'}</TableCell>
+                            <TableCell>
+                              {story.parse_quality ? (
+                                <Tooltip title={`Missing: ${story.parse_quality.missing_fields.join(', ') || 'none'}\nSegmentation: ${story.parse_quality.segmentation_reason}`} arrow>
+                                  <Chip
+                                    label={story.parse_quality.parse_confidence.toFixed(2)}
+                                    size="small"
+                                    color={story.parse_quality.parse_confidence >= 0.8 ? 'success' : story.parse_quality.parse_confidence >= 0.5 ? 'warning' : 'error'}
+                                    variant="outlined"
+                                  />
+                                </Tooltip>
+                              ) : '—'}
+                            </TableCell>
+                            <TableCell sx={{ maxWidth: 250, whiteSpace: 'normal', wordBreak: 'break-word', fontSize: '0.75rem' }}>
+                              {story.body_snippet ?? '—'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
               )}
               {contentTab === 1 && <JsonBlock data={contentResponse.headings} />}
               {contentTab === 2 && <JsonBlock data={contentResponse.links} />}
-              {contentTab === 3 && <JsonBlock data={contentResponse.images} />}
-              {contentTab === 4 && <JsonBlock data={contentResponse.meta} />}
-              {contentTab === 5 && <JsonBlock data={contentResponse.summary || contentResponse.pages} />}
+              {contentTab === 3 && <JsonBlock data={contentResponse.meta} />}
+              {contentTab === 4 && <JsonBlock data={contentResponse.raw_summary || contentResponse.summary || contentResponse.pages} />}
+              {contentTab === 5 && contentResponse.feed_meta && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>Feed Metadata</Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ maxWidth: '100%' }}>
+                    <Table size="small">
+                      <TableBody>
+                        {Object.entries(contentResponse.feed_meta).map(([key, value]) => (
+                          <TableRow key={key}>
+                            <TableCell sx={{ fontWeight: 600, whiteSpace: 'nowrap', width: 200 }}>{key}</TableCell>
+                            <TableCell>{String(value)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  {contentResponse.warnings && contentResponse.warnings.length > 0 && (
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom>Parse Warnings ({contentResponse.warnings.length})</Typography>
+                      {contentResponse.warnings.map((w, i) => (
+                        <Typography key={i} variant="body2">{w}</Typography>
+                      ))}
+                    </Alert>
+                  )}
+                </Box>
+              )}
+              {contentTab === 6 && (
+                <Box
+                  component="pre"
+                  sx={{
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    overflowWrap: 'anywhere',
+                    overflowY: 'auto',
+                    maxHeight: 600,
+                    maxWidth: '100%',
+                    m: 0,
+                    p: 2,
+                    fontSize: '0.85rem',
+                    lineHeight: 1.6,
+                    bgcolor: 'background.default',
+                    borderRadius: 1,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  {contentResponse.text || 'No text returned.'}
+                </Box>
+              )}
+              {contentTab === 7 && <JsonBlock data={contentResponse.images} />}
             </Box>
           ) : null}
-
-          <JsonBlock data={contentResponse} />
         </CardContent>
       </Card>
     </Box>

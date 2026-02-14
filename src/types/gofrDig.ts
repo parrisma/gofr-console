@@ -9,9 +9,8 @@ export interface AntiDetectionConfig {
   profile: ProfileType;
   custom_headers?: Record<string, string>;
   custom_user_agent?: string;
-  respect_robots_txt?: boolean;
   rate_limit_delay?: number;
-  max_tokens?: number;
+  max_response_chars?: number;
 }
 
 export interface AntiDetectionResponse extends AntiDetectionConfig {
@@ -19,11 +18,13 @@ export interface AntiDetectionResponse extends AntiDetectionConfig {
 }
 
 export interface StructureOptions {
+  selector?: string;
   include_navigation?: boolean;
   include_internal_links?: boolean;
   include_external_links?: boolean;
   include_forms?: boolean;
   include_outline?: boolean;
+  timeout_seconds?: number;
 }
 
 export interface ContentOptions {
@@ -33,8 +34,13 @@ export interface ContentOptions {
   include_links?: boolean;
   include_images?: boolean;
   include_meta?: boolean;
+  filter_noise?: boolean;
   session?: boolean;
   chunk_size?: number;
+  max_bytes?: number;
+  timeout_seconds?: number;
+  parse_results?: boolean;
+  source_profile_name?: string;
 }
 
 export interface DigSection {
@@ -61,6 +67,7 @@ export interface PageStructureResponse {
   success: boolean;
   url: string;
   title?: string;
+  language?: string;
   sections?: DigSection[];
   navigation?: DigNavigation[];
   internal_links?: Array<{ text: string; href: string }>;
@@ -82,9 +89,60 @@ export interface CrawlSummary {
   pages_by_depth: Record<string, number>;
 }
 
+export type ResponseType = 'inline' | 'session';
+
+/** Provenance tracking for a parsed story */
+export interface StoryProvenance {
+  root_url: string;
+  page_url: string;
+  crawl_depth: number;
+}
+
+/** Parse quality signals for a parsed story */
+export interface StoryParseQuality {
+  parse_confidence: number;
+  missing_fields: string[];
+  segmentation_reason: string;
+}
+
+/** A single story extracted by the deterministic news parser */
+export interface ParsedStory {
+  story_id: string;
+  headline: string;
+  subheadline?: string | null;
+  section?: string | null;
+  published?: string | null;
+  published_raw?: string;
+  body_snippet?: string | null;
+  comment_count?: number | null;
+  tags?: string[];
+  content_type?: string;
+  author?: string | null;
+  language?: string | null;
+  provenance?: StoryProvenance;
+  seen_on_pages?: Array<{ page_url: string; crawl_depth: number }>;
+  parse_quality?: StoryParseQuality;
+}
+
+/** Metadata about the parsed feed/crawl run */
+export interface FeedMeta {
+  parser_version: string;
+  source_profile: string;
+  source_name: string;
+  source_root_url: string;
+  crawl_time_utc: string;
+  pages_crawled: number;
+  stories_extracted: number;
+  duplicates_removed: number;
+  noise_lines_stripped: number;
+  parse_warnings: number;
+}
+
 export interface ContentResponse {
-  success: boolean;
-  url: string;
+  success?: boolean;
+  url?: string;
+  response_type?: ResponseType;
+  crawl_depth?: number;
   title?: string;
   text?: string;
   language?: string;
@@ -94,8 +152,13 @@ export interface ContentResponse {
   meta?: Record<string, string | null>;
   pages?: ScrapedPage[];
   summary?: CrawlSummary;
+  raw_summary?: CrawlSummary;
   session_id?: string;
   total_chunks?: number;
+  // Parsed mode (parse_results=true)
+  feed_meta?: FeedMeta;
+  stories?: ParsedStory[];
+  warnings?: string[];
 }
 
 export interface SessionInfoResponse {
@@ -180,4 +243,47 @@ export interface GetSessionErrorResponse {
     max_bytes: number;
     total_chunks: number;
   };
+}
+
+/** Standard MCP-style error codes from gofr-dig */
+export type DigErrorCode =
+  | 'INVALID_URL'
+  | 'URL_NOT_FOUND'
+  | 'FETCH_ERROR'
+  | 'TIMEOUT_ERROR'
+  | 'CONNECTION_ERROR'
+  | 'ROBOTS_BLOCKED'
+  | 'ACCESS_DENIED'
+  | 'RATE_LIMITED'
+  | 'RATE_LIMIT_EXCEEDED'
+  | 'SSRF_BLOCKED'
+  | 'SELECTOR_NOT_FOUND'
+  | 'INVALID_SELECTOR'
+  | 'EXTRACTION_ERROR'
+  | 'ENCODING_ERROR'
+  | 'INVALID_PROFILE'
+  | 'INVALID_HEADERS'
+  | 'INVALID_RATE_LIMIT'
+  | 'MAX_DEPTH_EXCEEDED'
+  | 'MAX_PAGES_EXCEEDED'
+  | 'UNKNOWN_TOOL'
+  | 'INVALID_ARGUMENT'
+  | 'INVALID_MAX_RESPONSE_CHARS'
+  | 'AUTH_ERROR'
+  | 'PERMISSION_DENIED'
+  | 'SESSION_ERROR'
+  | 'SESSION_NOT_FOUND'
+  | 'INVALID_CHUNK_INDEX'
+  | 'CHUNK_NOT_FOUND'
+  | 'PARSE_ERROR'
+  | 'CONFIGURATION_ERROR'
+  | 'CONTENT_TOO_LARGE';
+
+/** Standard error response shape from gofr-dig tools */
+export interface DigErrorResponse {
+  success: false;
+  error_code: DigErrorCode;
+  message: string;
+  details?: Record<string, unknown>;
+  recovery_strategy?: string;
 }

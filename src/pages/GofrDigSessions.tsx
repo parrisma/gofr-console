@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -22,6 +22,7 @@ import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
+import { logger } from '../services/logging';
 import type { JwtToken } from '../stores/configStore';
 import type {
   GetSessionResponse,
@@ -52,6 +53,16 @@ function formatToolError(tool: string, err: unknown, fallback: string): string {
 
 export default function GofrDigSessions() {
   const { tokens } = useConfig();
+
+  useEffect(() => {
+    logger.info({
+      event: 'ui_page_view',
+      message: 'GOFR-DIG Sessions page viewed',
+      component: 'GofrDigSessions',
+      operation: 'page_view',
+      result: 'success',
+    });
+  }, []);
 
   const [selectedTokenIndex, setSelectedTokenIndex] = useState<number>(-1);
   const selectedToken: JwtToken | null =
@@ -86,22 +97,46 @@ export default function GofrDigSessions() {
   const requireToken = (): string | undefined => selectedToken?.token;
 
   const handleListSessions = async () => {
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
     setSessionsListLoading(true);
     setSessionsListError(null);
     try {
       const response = await api.digListSessions(requireToken());
       setSessionsList(response.sessions ?? []);
       setHasLoaded(true);
+      logger.info({
+        event: 'ui_form_submitted',
+        message: 'list_sessions succeeded',
+        request_id: requestId,
+        component: 'GofrDigSessions',
+        operation: 'list_sessions',
+        result: 'success',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { total: response.sessions?.length ?? 0 },
+      });
     } catch (err) {
       setSessionsListError(formatToolError('list_sessions', err, 'Failed to load sessions'));
       setSessionsList([]);
       setHasLoaded(true);
+      logger.error({
+        event: 'ui_form_submitted',
+        message: 'list_sessions failed',
+        request_id: requestId,
+        component: 'GofrDigSessions',
+        operation: 'list_sessions',
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { cause: err instanceof Error ? err.message : 'unknown' },
+      });
     } finally {
       setSessionsListLoading(false);
     }
   };
 
   const handleSessionInfo = async () => {
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
     setSessionInfoLoading(true);
     setSessionError(null);
     try {
@@ -117,9 +152,28 @@ export default function GofrDigSessions() {
       if (chunkResult.status === 'fulfilled') setSessionChunk(chunkResult.value);
       if (urlsResult.status === 'fulfilled') setSessionUrls(urlsResult.value);
       else setSessionUrls(null);
+      logger.info({
+        event: 'ui_form_submitted',
+        message: 'get_session_info succeeded',
+        request_id: requestId,
+        component: 'GofrDigSessions',
+        operation: 'get_session_info',
+        result: 'success',
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
     } catch (err) {
       setSessionError(formatToolError('get_session_info', err, 'Failed to load session info'));
       setSessionInfo(null);
+      logger.error({
+        event: 'ui_form_submitted',
+        message: 'get_session_info failed',
+        request_id: requestId,
+        component: 'GofrDigSessions',
+        operation: 'get_session_info',
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { cause: err instanceof Error ? err.message : 'unknown' },
+      });
     } finally {
       setSessionInfoLoading(false);
     }

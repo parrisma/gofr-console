@@ -4,6 +4,7 @@
 import { configStore } from '../../stores/configStore';
 import type { ClientRestrictions } from '../../types/restrictions';
 import { ApiError, defaultRecoveryHint } from './errors';
+import { logger } from '../logging';
 import type { 
   ClientSummary, 
   Source, 
@@ -68,6 +69,35 @@ interface HealthCheckResult {
   }>;
 }
 
+function summarizeArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const summary: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (/token|authorization|secret|password|api[_-]?key|cookie/i.test(key)) continue;
+    if (key === 'url' && typeof value === 'string') {
+      try {
+        summary.url_host = new URL(value).host;
+      } catch {
+        summary.url_host = value.split('?')[0];
+      }
+      continue;
+    }
+    if (typeof value === 'string') {
+      summary[key] = value.length > 120 ? `${value.slice(0, 120)}...[TRUNCATED]` : value;
+      continue;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean' || value == null) {
+      summary[key] = value;
+      continue;
+    }
+    if (Array.isArray(value)) {
+      summary[key] = `[array:${value.length}]`;
+      continue;
+    }
+    summary[key] = '[object]';
+  }
+  return summary;
+}
+
 function getTextContent(result: HealthCheckResult, service: string, tool: string): string {
   const textContent = result.content?.find(c => c.type === 'text')?.text;
   if (!textContent) {
@@ -79,6 +109,23 @@ function getTextContent(result: HealthCheckResult, service: string, tool: string
     });
   }
   return textContent;
+}
+
+/**
+ * Detect common server-side error strings leaked into MCP tool text output.
+ * Returns a user-friendly message if detected, or null.
+ */
+function detectServerError(text: string): string | null {
+  const trimmed = text.trimStart();
+  // Python tracebacks / NameError / TypeError etc.
+  if (/^(Traceback|.*Error:|.*Exception:)/i.test(trimmed)) {
+    return `Server returned an error instead of JSON: ${trimmed.slice(0, 300)}`;
+  }
+  // Generic "name 'x' is not defined" pattern (Python NameError without prefix)
+  if (/^name\s+'/.test(trimmed)) {
+    return `Server returned a Python NameError: ${trimmed.slice(0, 300)}`;
+  }
+  return null;
 }
 
 function parseToolText<T>(
@@ -112,11 +159,47 @@ function parseToolText<T>(
     return (parsed.data || parsed) as T;
   } catch (err) {
     if (err instanceof ApiError) throw err;
+
+    // Check whether the raw text is a server-side error leaked as tool output
+    const serverErr = detectServerError(textContent);
+    if (serverErr) {
+      logger.error({
+        event: 'api_parse_error',
+        message: `Server-side error in tool output: ${service}/${tool}`,
+        component: 'api',
+        service_name: service,
+        tool_name: tool,
+        result: 'failure',
+        error_code: 'SERVER_ERROR_IN_OUTPUT',
+        data: { raw_snippet: textContent.slice(0, 500) },
+      });
+      throw new ApiError({
+        service,
+        tool,
+        message: serverErr,
+        recovery: 'This is a server-side bug — the MCP tool returned an error string instead of JSON. Check server logs.',
+      });
+    }
+
+    // Generic JSON parse failure — include a snippet of what was received
+    const snippet = textContent.length > 200
+      ? textContent.slice(0, 200) + '…'
+      : textContent;
+    logger.error({
+      event: 'api_parse_error',
+      message: `Failed to parse tool output as JSON: ${service}/${tool}`,
+      component: 'api',
+      service_name: service,
+      tool_name: tool,
+      result: 'failure',
+      error_code: 'JSON_PARSE_ERROR',
+      data: { raw_snippet: textContent.slice(0, 500) },
+    });
     throw new ApiError({
       service,
       tool,
-      message: err instanceof Error ? err.message : 'Failed to parse response',
-      recovery: 'Check MCP logs for malformed output.',
+      message: `Response is not valid JSON. Server returned: ${snippet}`,
+      recovery: 'The MCP tool returned non-JSON text. Check server logs for errors.',
       cause: err,
     });
   }
@@ -246,6 +329,23 @@ class McpClient {
 
   // Call an MCP tool
   async callTool<T>(toolName: string, args: Record<string, unknown> = {}, authToken?: string, _retried = false): Promise<T> {
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
+    logger.info({
+      event: 'api_call_started',
+      message: `MCP tool call started: ${this.serviceName}/${toolName}`,
+      request_id: requestId,
+      operation: toolName,
+      component: 'api',
+      service_name: this.serviceName,
+      tool_name: toolName,
+      dependency: `${this.serviceName}-mcp`,
+      data: {
+        retried: _retried,
+        args: summarizeArgs(args),
+      },
+    });
+
     // Ensure session is initialized
     if (!this.sessionId) {
       await this.initialize();
@@ -286,6 +386,25 @@ class McpClient {
         signal: controller.signal,
       });
     } catch (err) {
+      const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+      logger.error({
+        event: isTimeout ? 'api_call_timed_out' : 'api_call_failed',
+        message: isTimeout
+          ? `MCP tool call timed out: ${this.serviceName}/${toolName}`
+          : `MCP tool call failed: ${this.serviceName}/${toolName}`,
+        request_id: requestId,
+        operation: toolName,
+        component: 'api',
+        service_name: this.serviceName,
+        tool_name: toolName,
+        dependency: `${this.serviceName}-mcp`,
+        result: isTimeout ? 'timeout' : 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        error_code: isTimeout ? 'TIMEOUT' : undefined,
+        data: {
+          cause: err instanceof Error ? err.message : 'Network request failed',
+        },
+      });
       throw new ApiError({
         service: this.serviceName,
         tool: toolName,
@@ -300,11 +419,39 @@ class McpClient {
     if (!response.ok) {
       // Session may have expired — re-initialize once, then retry
       if ((response.status === 400 || response.status === 404) && !_retried) {
+        logger.warn({
+          event: 'api_call_failed',
+          message: `MCP session expired, retrying: ${this.serviceName}/${toolName}`,
+          request_id: requestId,
+          operation: toolName,
+          component: 'api',
+          service_name: this.serviceName,
+          tool_name: toolName,
+          dependency: `${this.serviceName}-mcp`,
+          result: 'failure',
+          http_status: response.status,
+          duration_ms: Math.round(performance.now() - startedAt),
+          error_code: String(response.status),
+        });
         this.sessionId = null;
         await this.initialize();
         return this.callTool(toolName, args, authToken, true);
       }
       if (response.status === 401 || response.status === 403) {
+        logger.error({
+          event: 'api_call_failed',
+          message: `MCP unauthorized: ${this.serviceName}/${toolName}`,
+          request_id: requestId,
+          operation: toolName,
+          component: 'api',
+          service_name: this.serviceName,
+          tool_name: toolName,
+          dependency: `${this.serviceName}-mcp`,
+          result: 'failure',
+          http_status: response.status,
+          duration_ms: Math.round(performance.now() - startedAt),
+          error_code: 'AUTH',
+        });
         throw new ApiError({
           service: this.serviceName,
           tool: toolName,
@@ -313,6 +460,20 @@ class McpClient {
           recovery: defaultRecoveryHint(response.status),
         });
       }
+      logger.error({
+        event: 'api_call_failed',
+        message: `MCP call failed: ${this.serviceName}/${toolName}`,
+        request_id: requestId,
+        operation: toolName,
+        component: 'api',
+        service_name: this.serviceName,
+        tool_name: toolName,
+        dependency: `${this.serviceName}-mcp`,
+        result: 'failure',
+        http_status: response.status,
+        duration_ms: Math.round(performance.now() - startedAt),
+        error_code: String(response.status),
+      });
       throw new ApiError({
         service: this.serviceName,
         tool: toolName,
@@ -326,6 +487,19 @@ class McpClient {
     try {
       result = await parseSseResponse<T>(response);
     } catch (err) {
+      logger.error({
+        event: 'api_call_failed',
+        message: `Failed to parse MCP SSE response: ${this.serviceName}/${toolName}`,
+        request_id: requestId,
+        operation: toolName,
+        component: 'api',
+        service_name: this.serviceName,
+        tool_name: toolName,
+        dependency: `${this.serviceName}-mcp`,
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        error_code: 'SSE_PARSE_ERROR',
+      });
       throw new ApiError({
         service: this.serviceName,
         tool: toolName,
@@ -335,6 +509,22 @@ class McpClient {
       });
     }
     if (result.error) {
+      logger.error({
+        event: 'api_call_failed',
+        message: `MCP tool error: ${this.serviceName}/${toolName}`,
+        request_id: requestId,
+        operation: toolName,
+        component: 'api',
+        service_name: this.serviceName,
+        tool_name: toolName,
+        dependency: `${this.serviceName}-mcp`,
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        error_code: String(result.error.code),
+        data: {
+          mcp_error: result.error.message,
+        },
+      });
       throw new ApiError({
         service: this.serviceName,
         tool: toolName,
@@ -343,6 +533,19 @@ class McpClient {
         recovery: defaultRecoveryHint(),
       });
     }
+
+    logger.info({
+      event: 'api_call_succeeded',
+      message: `MCP tool call succeeded: ${this.serviceName}/${toolName}`,
+      request_id: requestId,
+      operation: toolName,
+      component: 'api',
+      service_name: this.serviceName,
+      tool_name: toolName,
+      dependency: `${this.serviceName}-mcp`,
+      result: 'success',
+      duration_ms: Math.round(performance.now() - startedAt),
+    });
 
     return result.result as T;
   }
@@ -440,12 +643,10 @@ export const api = {
     port: configStore.getMcpPort('gofr-iq'),
   }),
 
-  // GOFR-DIG Health Check (ping)
-  digPing: async (authToken?: string): Promise<DigPingResponse> => {
+  // GOFR-DIG Health Check (ping) — unauthenticated, no auth_token
+  digPing: async (): Promise<DigPingResponse> => {
     const client = getMcpClient('gofr-dig');
-    const params: Record<string, unknown> = {};
-    if (authToken) params.auth_tokens = [authToken];
-    const result = await client.callTool<HealthCheckResult>('ping', params);
+    const result = await client.callTool<HealthCheckResult>('ping', {});
     const textContent = getTextContent(result, 'gofr-dig', 'ping');
     return parseToolText<DigPingResponse>('gofr-dig', 'ping', textContent);
   },
@@ -457,7 +658,7 @@ export const api = {
   ): Promise<AntiDetectionResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = { ...settings };
-    if (authToken) params.auth_tokens = [authToken];
+    if (authToken) params.auth_token = authToken;
     const result = await client.callTool<HealthCheckResult>('set_antidetection', params);
     const textContent = getTextContent(result, 'gofr-dig', 'set_antidetection');
     return parseToolText<AntiDetectionResponse>('gofr-dig', 'set_antidetection', textContent);
@@ -471,7 +672,7 @@ export const api = {
   ): Promise<PageStructureResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = { url, ...options };
-    if (authToken) params.auth_tokens = [authToken];
+    if (authToken) params.auth_token = authToken;
     const result = await client.callTool<HealthCheckResult>('get_structure', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_structure');
     return parseToolText<PageStructureResponse>('gofr-dig', 'get_structure', textContent);
@@ -485,7 +686,7 @@ export const api = {
   ): Promise<ContentResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = { url, ...options };
-    if (authToken) params.auth_tokens = [authToken];
+    if (authToken) params.auth_token = authToken;
     const result = await client.callTool<HealthCheckResult>('get_content', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_content');
     return parseToolText<ContentResponse>('gofr-dig', 'get_content', textContent);
@@ -498,7 +699,7 @@ export const api = {
   ): Promise<SessionInfoResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = { session_id: sessionId };
-    if (authToken) params.auth_tokens = [authToken];
+    if (authToken) params.auth_token = authToken;
     const result = await client.callTool<HealthCheckResult>('get_session_info', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_session_info');
     return parseToolText<SessionInfoResponse>('gofr-dig', 'get_session_info', textContent);
@@ -512,13 +713,24 @@ export const api = {
   ): Promise<SessionChunkResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = { session_id: sessionId, chunk_index: chunkIndex };
-    if (authToken) params.auth_tokens = [authToken];
+    if (authToken) params.auth_token = authToken;
     const result = await client.callTool<HealthCheckResult>('get_session_chunk', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_session_chunk');
     const parsed = parseToolText<SessionChunkResponse>('gofr-dig', 'get_session_chunk', textContent);
     // DEBUG: log actual runtime type so we can diagnose empty-chunk issues
     if (typeof parsed !== 'object' || parsed === null) {
-      console.warn('[digGetSessionChunk] parseToolText returned non-object:', typeof parsed, parsed);
+      logger.warn({
+        event: 'api_call_failed',
+        message: 'digGetSessionChunk parseToolText returned non-object',
+        operation: 'get_session_chunk',
+        component: 'api',
+        service_name: 'gofr-dig',
+        tool_name: 'get_session_chunk',
+        dependency: 'gofr-dig-mcp',
+        result: 'failure',
+        error_code: 'INVALID_PARSE_RESULT',
+        data: { parsed_type: typeof parsed },
+      });
     }
     return parsed;
   },
@@ -530,8 +742,9 @@ export const api = {
     options?: { asJson?: boolean; baseUrl?: string }
   ): Promise<SessionUrlsResponse> => {
     const client = getMcpClient('gofr-dig');
-    const params: Record<string, unknown> = { session_id: sessionId, as_json: false };
-    if (authToken) params.auth_tokens = [authToken];
+    const params: Record<string, unknown> = { session_id: sessionId };
+    if (authToken) params.auth_token = authToken;
+    // as_json defaults to true in the new API; pass false explicitly for URL mode
     if (options?.asJson != null) params.as_json = options.asJson;
     if (options?.baseUrl) params.base_url = options.baseUrl;
     const result = await client.callTool<HealthCheckResult>('get_session_urls', params);
@@ -546,7 +759,7 @@ export const api = {
   ): Promise<SessionUrlsJsonResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = { session_id: sessionId, as_json: true };
-    if (authToken) params.auth_tokens = [authToken];
+    if (authToken) params.auth_token = authToken;
     const result = await client.callTool<HealthCheckResult>('get_session_urls', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_session_urls');
     return parseToolText<SessionUrlsJsonResponse>('gofr-dig', 'get_session_urls', textContent);
@@ -556,12 +769,13 @@ export const api = {
   digGetSession: async (
     authToken: string | undefined,
     sessionId: string,
-    maxBytes?: number
+    options?: { maxBytes?: number; timeoutSeconds?: number }
   ): Promise<GetSessionResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = { session_id: sessionId };
-    if (authToken) params.auth_tokens = [authToken];
-    if (maxBytes != null) params.max_bytes = maxBytes;
+    if (authToken) params.auth_token = authToken;
+    if (options?.maxBytes != null) params.max_bytes = options.maxBytes;
+    if (options?.timeoutSeconds != null) params.timeout_seconds = options.timeoutSeconds;
     const result = await client.callTool<HealthCheckResult>('get_session', params);
     const textContent = getTextContent(result, 'gofr-dig', 'get_session');
     return parseToolText<GetSessionResponse>('gofr-dig', 'get_session', textContent);
@@ -571,7 +785,7 @@ export const api = {
   digListSessions: async (authToken?: string): Promise<ListSessionsResponse> => {
     const client = getMcpClient('gofr-dig');
     const params: Record<string, unknown> = {};
-    if (authToken) params.auth_tokens = [authToken];
+    if (authToken) params.auth_token = authToken;
     const result = await client.callTool<HealthCheckResult>('list_sessions', params);
     const textContent = getTextContent(result, 'gofr-dig', 'list_sessions');
     return parseToolText<ListSessionsResponse>('gofr-dig', 'list_sessions', textContent);
@@ -677,7 +891,18 @@ export const api = {
       
       return { instruments: Array.from(instrumentMap.values()) as Instrument[] };
     } catch (err) {
-      console.warn('query_documents parse error:', err);
+        logger.warn({
+          event: 'api_call_failed',
+          message: 'query_documents parse error',
+          operation: 'query_documents',
+          component: 'api',
+          service_name: 'gofr-iq',
+          tool_name: 'query_documents',
+          dependency: 'gofr-iq-mcp',
+          result: 'failure',
+          error_code: 'PARSE_ERROR',
+          data: { cause: err instanceof Error ? err.message : 'unknown' },
+        });
       return { instruments: [] };
     }
   },
@@ -996,7 +1221,18 @@ export const api = {
       return parseToolText<InstrumentNewsResponse>('gofr-iq', 'get_instrument_news', textContent);
     } catch (err) {
       // Graceful degradation: return empty result on error
-      console.warn(`get_instrument_news failed for ${ticker}:`, err instanceof Error ? err.message : err);
+      logger.warn({
+        event: 'api_call_failed',
+        message: `get_instrument_news failed for ${ticker}`,
+        operation: 'get_instrument_news',
+        component: 'api',
+        service_name: 'gofr-iq',
+        tool_name: 'get_instrument_news',
+        dependency: 'gofr-iq-mcp',
+        result: 'failure',
+        error_code: 'NEWS_FALLBACK',
+        data: { cause: err instanceof Error ? err.message : 'unknown' },
+      });
       return defaultResponse;
     }
   },

@@ -40,7 +40,17 @@ else
 fi
 
 echo ""
-echo "[3/4] Checking for Semgrep..."
+echo "[3/5] Running unit tests..."
+echo "-----------------------------------------------------------------------"
+if pnpm run test:unit; then
+    echo "✓ Unit tests passed"
+else
+    echo "✗ Unit tests failed"
+    FAILED=$((FAILED + 1))
+fi
+
+echo ""
+echo "[4/5] Checking for Semgrep..."
 echo "-----------------------------------------------------------------------"
 if command -v semgrep >/dev/null 2>&1; then
     echo "Running Semgrep SAST..."
@@ -58,7 +68,7 @@ else
 fi
 
 echo ""
-echo "[4/4] Checking for Trivy (Docker image scanning)..."
+echo "[5/5] Checking for Trivy (Docker image scanning)..."
 echo "-----------------------------------------------------------------------"
 if command -v trivy >/dev/null 2>&1; then
     if docker images gofr-console-dev:latest >/dev/null 2>&1; then

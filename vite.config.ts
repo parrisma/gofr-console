@@ -1,6 +1,19 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { uiConfigPlugin } from "./vite/ui-config-plugin";
+import { execSync } from "node:child_process";
+
+// Auto-incrementing build number from git
+function gitBuildInfo() {
+  try {
+    const count = execSync('git rev-list --count HEAD', { encoding: 'utf-8' }).trim();
+    const hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+    return { count, hash };
+  } catch {
+    return { count: '0', hash: 'unknown' };
+  }
+}
+const build = gitBuildInfo();
 
 // MCP Service proxy configuration
 // Note: These use production ports by default. The console's Operations page
@@ -26,9 +39,20 @@ for (const { name, host, port } of mcpServices) {
   };
 }
 
+proxyConfig['/api/gofr-seq'] = {
+  target: `http://${process.env.GOFR_SEQ_HOST || 'gofr-seq'}:${process.env.GOFR_SEQ_PORT || '5341'}`,
+  changeOrigin: true,
+  followRedirects: true,
+  rewrite: (path: string) => path.replace(/^\/api\/gofr-seq/, ''),
+};
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), uiConfigPlugin()],
+  define: {
+    __BUILD_NUMBER__: JSON.stringify(build.count),
+    __BUILD_HASH__: JSON.stringify(build.hash),
+  },
   server: {
     host: "0.0.0.0",
     port: 3000,

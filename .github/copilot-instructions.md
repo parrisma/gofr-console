@@ -1,19 +1,71 @@
 # Copilot Instructions (GOFR Console)
 
-## Core
-- Dev container + Docker access.
-- Never use `localhost`; use service hostnames (e.g., `gofr-neo4j`).
-- Prefer repo control scripts for services/auth/ingestion/tests.
-- Keep code simple; debug basics first (env, health, logs, auth, connectivity).
-- If user reminds a preferred pattern, add it here.
+## IMMUTABLE INSTRUCTIONS
+1. Always ask questions if the request requires you to make assumptions
+2. Avoid head/tail on commands as it makes it hard for user to see what is happening
+3. when ask to write something always do it in a doc if it is more than a few sentences
+4. for technical answers always reply in plain text and avoid markdown formatting
+5. avoid using localhost use docker names or known IP and ports for services
 
-## Documentation
-- **MCP Tool Interface**: `/home/gofr/devroot/gofr-console/tmp/mcp-tool-interface.md` - Complete GOFR-IQ MCP API specification, tools, parameters, and response formats
-- **Neo4j Schema**: `/home/gofr/devroot/gofr-console/tmp/neo4j-schema.md` - Knowledge graph schema, node types, relationships, and data model
+## CHANGE PROCESS
+1. For any change > than a few simple lines the process is
+1.1 Write a specification doc with the proposed changes and assumptions to be reviewed by user (avoid code in specs)
+1.1.1 never make assumptions always ask questions to user.
+1.2 Once spec is agreed write a doc that is a step by **SMALL** step implementation plan witch checks to track progress (avoid code in implementation plan)
+1.2.1 plan to include updating all code, docs, tests etc
+1.2.2 full tests should be run before and at end as acceptance test
+1.2.3 tests should be modified / added as needed ..
+1.3 execute the impl plan when it has been agreed by user.
+
+## ISSUE RESOLUTION
+1. For any issue that is not a simple fix write a systematic strategy document to define and resolve the root cause
+1.1 document assumptions and how they can be validated, assume nothing
+1.2 work systematically and update document as needed
+1.3 ask user questions to validate assumptions and findings
+2. execute the strategy and stay fixed in the cause
+2.1 document any side issues but do not deviate from the strategy to fix them until the root cause is resolved
+
+## PROJECT DETAILS
+- 
+- Uses UV only: `uv run`, `uv add`. No `pip install`, no `python -m venv`.
+- Prefer `gofr_common` helpers (auth, config, storage, logging).
+- VSsCode is run in a Dev container so need to use docker hostnames and ports, not localhost.
+- host docker is available from the dev container at `host.docker.internal`.
+
+## TESTING
+- run targeted tests via run_tests.sh before running full suite
+- Always use scripts/run_tests.sh to run tests (sets PYTHONPATH, env vars, etc)
+- Modify this script if it does not do what is needed or needs enhancing to manage en set up/teardown.
+- When tests break always fix them even if not apparently related to current code changes. 
+- full tests mean running tests that depend on test services being up including vault, SEQ etc all of which run_tests.sh can start 
+
+## MCP Tools (current)
+`ping`, `set_antidetection`, `get_content`, `get_structure`, `get_session_info`, `get_session_chunk`, `list_sessions`, `get_session_urls`, `get_session`
+
+### MCP Tool Pattern (required)
+1. Add `Tool(...)` schema in `handle_list_tools`.
+2. Route in `handle_call_tool`.
+3. Implement `_handle_*` returning `List[TextContent]` via `_json_text`.
+4. Use `_error_response(...)` or `_exception_response(...)` for errors.
+
+## Useful Scripts
+1. TBC
+
+## LOGGING
+- Use the **project logger** (e.g., `StructuredLogger`), **not** `print()` or default logging.
+- Logs must be **clear and actionable**, not cryptic.
+
+# ERRORS
+- define new exceptions if needed
+- errors must focus on root cause and not the side effect.
+- All errors must include **cause, references/context**, and **recovery options** where possible.
+
+## Hardening Guidance
+- Run and enhance /home/gofr/devroot/gofr-dig/test/code_quality/test_code_quality.py to ensure code stays clean and simple
+- review code after writing is as a senior engineer and security SME and harden against common security issues and code quality issues.
 
 ## MCP (Model Context Protocol) Integration
 GOFR MCP servers use **HTTP Streamable** protocol (not simple REST).
-
 ### Key Points
 - **Session-based**: Must call `initialize` first to get `mcp-session-id` header.
 - **SSE responses**: Responses are Server-Sent Events format (`event: message\ndata: {...}`).
@@ -81,19 +133,3 @@ See `src/services/api/index.ts` for `McpClient` class with session management.
 
 ## Build/Run Safety
 - Don’t run destructive commands without confirmation.
-
-## Logging
-- Use the **project logger** (e.g., `StructuredLogger`), **not** `print()` or default logging.
-- Logs must be **clear and actionable**, not cryptic.
-- All errors must include **cause, references/context**, and **recovery options** where possible.
-
-## Hardening Guidance
-- Prefer `ApiError` (src/services/api/errors.ts) for API failures and include service/tool context and recovery hints.
-- Avoid generic “Failed to parse/failed to load” messages; surface root cause and next step.
-- Centralize parsing and error normalization in the API layer; UI should display actionable error messages.
-- For MCP failures, include tool name and suggest recovery (re-auth, check MCP health, retry).
-## Type Safety
-- Use shared types from `src/types/` for API responses and entities (e.g., `ClientSummary`, `NewsArticle`).
-- ESLint rules forbid local `ClientProfile`, `Source`, `Instrument` interfaces in pages; import from shared types.
-- API methods should have explicit return type annotations using types from `src/types/gofrIQ.ts`.
-- When API returns nested data (e.g., `profile.mandate_type`), flatten it in the API layer or provide mapping functions.
