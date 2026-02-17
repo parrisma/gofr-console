@@ -37,11 +37,11 @@ Last updated: 2026-02-17
    - Phase 1c (GOFR-IQ Client 360 Quick Start): Done
 - Phase 2 (Standardized TokenSelect): Done
 - Phase 3 (Unified error display): Done
-- Phase 4 (Progressive disclosure for raw JSON): In progress
+- Phase 4 (Progressive disclosure for raw JSON): Done
 - Phase 5 (GOFR-DOC context strip): Done
 - Phase 6 (Dashboard task launcher): Done
 - Phase 7 (Consistent help affordance): Done
-- Phase 8 (Microcopy rewrite): Not started
+- Phase 8 (Microcopy rewrite): In progress
 - Phase 9 (Inline examples for JSON fields): Not started
 - Phase 10 (Table affordance consistency): Not started
 

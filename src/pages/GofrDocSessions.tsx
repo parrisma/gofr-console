@@ -28,10 +28,10 @@ import type {
   DocSessionStatusResponse,
 } from '../types/gofrDoc';
 import RequestPreview from '../components/common/RequestPreview';
-import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import TokenSelect from '../components/common/TokenSelect';
 import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
+import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
 
 const ALIAS_RE = /^[A-Za-z0-9_-]{3,64}$/;
 
@@ -552,7 +552,10 @@ export default function GofrDocSessions() {
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1 }}>
         <CardContent>
-          <Typography variant="h6">Create session</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Create session</Typography>
+            <RawResponsePopupIcon title="Raw create_document_session response" data={createRes} />
+          </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Alias rules: 3–64 chars; letters, numbers, hyphen, underscore.
           </Typography>
@@ -631,13 +634,20 @@ export default function GofrDocSessions() {
             <RequestPreview tool="create_document_session" args={{ template_id: templateId, alias }} />
           </Box>
           {createErr ? <ToolErrorAlert err={createErr} fallback="create_document_session failed" /> : null}
-          <JsonBlock data={createRes} copyLabel="Copy create response" />
+          {createRes?.session_id ? (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              Created session_id: {createRes.session_id}
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Active sessions</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Active sessions</Typography>
+            <RawResponsePopupIcon title="Raw list_active_sessions response" data={listRes} />
+          </Box>
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
               variant="contained"
@@ -675,13 +685,15 @@ export default function GofrDocSessions() {
               ))}
             </Box>
           ) : null}
-          <JsonBlock data={listRes} copyLabel="Copy sessions" />
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Session status</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Session status</Typography>
+            <RawResponsePopupIcon title="Raw get_session_status response" data={statusRes} />
+          </Box>
           <TextField label="session_id" value={statusSessionId} onChange={(e) => setStatusSessionId(e.target.value)} fullWidth sx={{ mt: 2 }} />
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
@@ -695,13 +707,22 @@ export default function GofrDocSessions() {
             <RequestPreview tool="get_session_status" args={{ session_id: statusSessionId }} />
           </Box>
           {statusErr ? <ToolErrorAlert err={statusErr} fallback="get_session_status failed" /> : null}
-          <JsonBlock data={statusRes} copyLabel="Copy status" />
+          {statusRes ? (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Ready to render: {String(statusRes.is_ready_to_render ?? 'unknown')} | Fragments: {String(statusRes.fragment_count ?? '—')} | Template: {String(statusRes.template_id ?? '—')}
+              </Typography>
+            </Box>
+          ) : null}
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Abort session (destructive)</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Abort session (destructive)</Typography>
+            <RawResponsePopupIcon title="Raw abort_document_session response" data={abortRes} />
+          </Box>
           <TextField label="session_id" value={abortSessionId} onChange={(e) => setAbortSessionId(e.target.value)} fullWidth sx={{ mt: 2 }} />
           <Divider sx={{ my: 2 }} />
           <TextField
@@ -723,7 +744,11 @@ export default function GofrDocSessions() {
             <RequestPreview tool="abort_document_session" args={{ session_id: abortSessionId }} />
           </Box>
           {abortErr ? <ToolErrorAlert err={abortErr} fallback="abort_document_session failed" /> : null}
-          <JsonBlock data={abortRes} copyLabel="Copy abort response" />
+          {abortRes && (abortRes as { message?: unknown }).message ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              {String((abortRes as { message?: unknown }).message)}
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
     </Box>

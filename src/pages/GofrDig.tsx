@@ -36,6 +36,7 @@ import { logger } from '../services/logging';
 import type { JwtToken } from '../stores/configStore';
 import TokenSelect from '../components/common/TokenSelect';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
+import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
 import type {
   AntiDetectionResponse,
   ContentResponse,
@@ -447,7 +448,10 @@ export default function GofrDig() {
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>②</Box>
               Anti-Detection Settings
             </Typography>
-            {antiLoading && <CircularProgress size={20} />}
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+              <RawResponsePopupIcon title="Raw set_antidetection response" data={antiResponse} />
+              {antiLoading && <CircularProgress size={20} />}
+            </Box>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Configure scraping profile before fetching. Applied server-side for the session.
@@ -521,8 +525,6 @@ export default function GofrDig() {
           <Button variant="contained" sx={{ mt: 2 }} onClick={handleApplyAntiDetection} disabled={antiLoading}>
             Apply Settings
           </Button>
-
-          <JsonBlock data={antiResponse} />
         </CardContent>
       </Card>
 
@@ -534,7 +536,10 @@ export default function GofrDig() {
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>③</Box>
               Structure Discovery
             </Typography>
-            {structureLoading && <CircularProgress size={20} />}
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+              <RawResponsePopupIcon title="Raw get_structure response" data={structureResponse} />
+              {structureLoading && <CircularProgress size={20} />}
+            </Box>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Analyse the page layout of <strong>{targetUrl || '(enter URL above)'}</strong> before extracting content.
@@ -594,7 +599,6 @@ export default function GofrDig() {
             <Chip label={`Language: ${structureResponse.language}`} size="small" sx={{ mt: 2, ml: 1 }} />
           )}
 
-          <JsonBlock data={structureResponse} />
         </CardContent>
       </Card>
 

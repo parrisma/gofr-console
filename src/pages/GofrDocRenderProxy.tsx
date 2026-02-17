@@ -22,6 +22,7 @@ import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import PdfPreview from '../components/common/PdfPreview';
 import TokenSelect from '../components/common/TokenSelect';
 import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
+import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
 import type { DocGetDocumentResponse, DocListStylesResponse, DocRenderFormat } from '../types/gofrDoc';
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -379,7 +380,10 @@ export default function GofrDocRenderProxy() {
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Styles</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Styles</Typography>
+            <RawResponsePopupIcon title="Raw list_styles response" data={stylesRes} />
+          </Box>
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
               variant="contained"
@@ -392,13 +396,15 @@ export default function GofrDocRenderProxy() {
             <RequestPreview tool="list_styles" args={{}} />
           </Box>
           {stylesErr ? <ToolErrorAlert err={stylesErr} fallback="list_styles failed" /> : null}
-          <JsonBlock data={stylesRes} copyLabel="Copy styles" />
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Render</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Render</Typography>
+            <RawResponsePopupIcon title="Raw get_document response" data={renderRes} />
+          </Box>
           <TextField
             label="session_id"
             value={sessionId}
@@ -458,7 +464,6 @@ export default function GofrDocRenderProxy() {
           </Box>
           {renderErr ? <ToolErrorAlert err={renderErr} fallback="get_document failed" /> : null}
           {renderPreview()}
-          <JsonBlock data={renderRes} copyLabel="Copy render response" />
         </CardContent>
       </Card>
 
@@ -497,7 +502,7 @@ export default function GofrDocRenderProxy() {
               <Typography variant="subtitle2" gutterBottom>
                 Body preview (first 4KB)
               </Typography>
-              <JsonBlock data={proxyFetchBodyPreview || null} copyLabel="Copy preview" maxHeight={240} />
+              <RawResponsePopupIcon title="Raw proxy body preview" data={proxyFetchBodyPreview || null} maxHeight={240} />
             </Box>
           ) : null}
         </CardContent>

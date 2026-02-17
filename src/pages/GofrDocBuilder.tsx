@@ -17,10 +17,10 @@ import { useConfig } from '../hooks/useConfig';
 import { useGofrDocUi } from '../hooks/useGofrDocUi';
 import type { JwtToken } from '../stores/configStore';
 import RequestPreview from '../components/common/RequestPreview';
-import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import TokenSelect from '../components/common/TokenSelect';
 import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
+import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
 import type {
   DocAddFragmentResponse,
   DocAddImageFragmentResponse,
@@ -522,7 +522,10 @@ export default function GofrDocBuilder() {
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Validate parameters</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Validate parameters</Typography>
+            <RawResponsePopupIcon title="Raw validate_parameters response" data={validateRes} />
+          </Box>
           <TextField
             select
             label="parameter_type"
@@ -572,13 +575,26 @@ export default function GofrDocBuilder() {
             />
           </Box>
           {validateErr ? <ToolErrorAlert err={validateErr} fallback="validate_parameters failed" /> : null}
-          <JsonBlock data={validateRes} copyLabel="Copy validate response" />
+          {validateRes ? (
+            validateRes.is_valid ? (
+              <Alert severity="success" sx={{ mt: 2 }}>
+                Parameters are valid.
+              </Alert>
+            ) : (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                Parameters are invalid. {validateRes.errors?.length ? `Errors: ${validateRes.errors.length}` : ''}
+              </Alert>
+            )
+          ) : null}
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Global parameters</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Global parameters</Typography>
+            <RawResponsePopupIcon title="Raw set_global_parameters response" data={globalsRes} />
+          </Box>
           <TextField
             label="parameters (JSON)"
             value={globalsJson}
@@ -603,13 +619,20 @@ export default function GofrDocBuilder() {
             />
           </Box>
           {globalsErr ? <ToolErrorAlert err={globalsErr} fallback="set_global_parameters failed" /> : null}
-          <JsonBlock data={globalsRes} copyLabel="Copy globals response" />
+          {globalsRes ? (
+            <Alert severity={globalsRes.success ? 'success' : 'warning'} sx={{ mt: 2 }}>
+              {globalsRes.message ?? (globalsRes.success ? 'Global parameters saved.' : 'Global parameters not saved.')}
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Add fragment</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Add fragment</Typography>
+            <RawResponsePopupIcon title="Raw add_fragment response" data={addFragmentRes} />
+          </Box>
           <TextField label="fragment_id" value={addFragmentId} onChange={(e) => setAddFragmentId(e.target.value)} fullWidth sx={{ mt: 2 }} />
           <TextField label="position" value={addFragmentPosition} onChange={(e) => setAddFragmentPosition(e.target.value)} fullWidth sx={{ mt: 2 }} />
           {!isValidPosition(addFragmentPosition) ? (
@@ -646,13 +669,20 @@ export default function GofrDocBuilder() {
             />
           </Box>
           {addFragmentErr ? <ToolErrorAlert err={addFragmentErr} fallback="add_fragment failed" /> : null}
-          <JsonBlock data={addFragmentRes} copyLabel="Copy add fragment response" />
+          {addFragmentRes?.fragment_instance_guid ? (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              Added fragment_instance_guid: {addFragmentRes.fragment_instance_guid}
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Add image fragment</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Add image fragment</Typography>
+            <RawResponsePopupIcon title="Raw add_image_fragment response" data={imgRes} />
+          </Box>
           <TextField label="image_url" value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} fullWidth sx={{ mt: 2 }} />
           <TextField label="title" value={imgTitle} onChange={(e) => setImgTitle(e.target.value)} fullWidth sx={{ mt: 2 }} />
           <TextField label="alt_text" value={imgAlt} onChange={(e) => setImgAlt(e.target.value)} fullWidth sx={{ mt: 2 }} />
@@ -700,13 +730,20 @@ export default function GofrDocBuilder() {
             />
           </Box>
           {imgErr ? <ToolErrorAlert err={imgErr} fallback="add_image_fragment failed" /> : null}
-          <JsonBlock data={imgRes} copyLabel="Copy add image response" />
+          {imgRes?.fragment_instance_guid ? (
+            <Alert severity="success" sx={{ mt: 2 }}>
+              Added image fragment_instance_guid: {imgRes.fragment_instance_guid}
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Fragments (review & remove)</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Fragments (review & remove)</Typography>
+            <RawResponsePopupIcon title="Raw list_session_fragments response" data={listRes} />
+          </Box>
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
               variant="contained"
@@ -736,7 +773,6 @@ export default function GofrDocBuilder() {
               ))}
             </Box>
           ) : null}
-          <JsonBlock data={listRes} copyLabel="Copy fragments" />
 
           <Divider sx={{ my: 2 }} />
           <Typography variant="subtitle2">Remove fragment</Typography>
@@ -760,7 +796,12 @@ export default function GofrDocBuilder() {
             <RequestPreview tool="remove_fragment" args={{ session_id: sessionId, fragment_instance_guid: removeGuid }} />
           </Box>
           {removeErr ? <ToolErrorAlert err={removeErr} fallback="remove_fragment failed" /> : null}
-          <JsonBlock data={removeRes} copyLabel="Copy remove response" />
+          <RawResponsePopupIcon title="Raw remove_fragment response" data={removeRes} />
+          {removeRes ? (
+            <Alert severity={(removeRes as { success?: unknown }).success ? 'success' : 'info'} sx={{ mt: 2 }}>
+              {String((removeRes as { message?: unknown }).message ?? 'Remove completed.')}
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
     </Box>
