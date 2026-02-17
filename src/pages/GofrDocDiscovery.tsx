@@ -29,6 +29,7 @@ import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import TokenSelect from '../components/common/TokenSelect';
+import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
 import type {
   DocFragmentDetailsResponse,
   DocListStylesResponse,
@@ -406,6 +407,7 @@ export default function GofrDocDiscovery() {
       <Typography variant="h4" gutterBottom>
         GOFR-DOC Discovery
       </Typography>
+      <GofrDocContextStrip />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Browse templates, fragments, and styles. Token is optional for detail calls.
       </Typography>

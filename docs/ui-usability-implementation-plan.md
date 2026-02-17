@@ -38,7 +38,7 @@ Last updated: 2026-02-17
 - Phase 2 (Standardized TokenSelect): Done
 - Phase 3 (Unified error display): Done
 - Phase 4 (Progressive disclosure for raw JSON): In progress
-- Phase 5 (GOFR-DOC context strip): Not started
+- Phase 5 (GOFR-DOC context strip): Done
 - Phase 6 (Dashboard task launcher): Not started
 - Phase 7 (Consistent help affordance): Not started
 - Phase 8 (Microcopy rewrite): Not started

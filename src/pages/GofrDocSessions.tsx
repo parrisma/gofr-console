@@ -31,6 +31,7 @@ import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import TokenSelect from '../components/common/TokenSelect';
+import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
 
 const ALIAS_RE = /^[A-Za-z0-9_-]{3,64}$/;
 
@@ -491,6 +492,8 @@ export default function GofrDocSessions() {
       <Typography variant="h4" gutterBottom>
         GOFR-DOC Sessions
       </Typography>
+
+      <GofrDocContextStrip />
 
       <Card sx={{ mb: 3 }}>
         <CardContent>

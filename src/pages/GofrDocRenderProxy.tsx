@@ -21,6 +21,7 @@ import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import PdfPreview from '../components/common/PdfPreview';
 import TokenSelect from '../components/common/TokenSelect';
+import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
 import type { DocGetDocumentResponse, DocListStylesResponse, DocRenderFormat } from '../types/gofrDoc';
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -345,6 +346,7 @@ export default function GofrDocRenderProxy() {
       <Typography variant="h4" gutterBottom>
         GOFR-DOC Render & Proxy
       </Typography>
+      <GofrDocContextStrip />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Render a session as HTML/Markdown/PDF and optionally test proxy downloads. HTML preview runs in a sandboxed iframe.
       </Typography>

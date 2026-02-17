@@ -9,6 +9,7 @@ import { logger } from '../services/logging';
 import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
+import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
 import type { DocPingResponse } from '../types/gofrDoc';
 
 export default function GofrDocHealthCheck() {
@@ -73,6 +74,7 @@ export default function GofrDocHealthCheck() {
     <Box>
       <Box display="flex" alignItems="center" gap={2} mb={2}>
         <Typography variant="h4">GOFR-DOC Health</Typography>
+         <GofrDocContextStrip />
         <Chip label="MCP" size="small" />
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>

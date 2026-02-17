@@ -20,6 +20,7 @@ import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import TokenSelect from '../components/common/TokenSelect';
+import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
 import type {
   DocAddFragmentResponse,
   DocAddImageFragmentResponse,
@@ -470,6 +471,7 @@ export default function GofrDocBuilder() {
       <Typography variant="h4" gutterBottom>
         GOFR-DOC Builder
       </Typography>
+      <GofrDocContextStrip />
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Build a document session by setting globals and adding/removing fragments. All requests are shown for copy/paste.
       </Typography>
