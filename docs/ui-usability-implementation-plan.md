@@ -43,7 +43,7 @@ Last updated: 2026-02-17
 - Phase 7 (Consistent help affordance): Done
 - Phase 8 (Microcopy rewrite): Done
 - Phase 9 (Inline examples for JSON fields): Done
-- Phase 10 (Table affordance consistency): In progress
+- Phase 10 (Table affordance consistency): Done
 
 ---
 
@@ -299,6 +299,7 @@ Implementation approach:
 Steps:
 
 1. Inventory interactive tables vs static tables.
+   - Inventory result (2026-02-17): interactive tables are the Templates and Styles tables on GOFR-DOC Discovery; other tables in the UI are currently static.
 2. Ensure clickable rows have clear hover state and microcopy (“Click row to …”).
 3. Ensure empty states are explicit and consistent.
 

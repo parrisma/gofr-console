@@ -141,7 +141,7 @@ export default function GofrDocDiscovery() {
   const [templatesErr, setTemplatesErr] = useState<unknown>(null);
   const [templates, setTemplates] = useState<DocListTemplatesResponse | null>(null);
 
-  const [templateId, setTemplateId] = useState('');
+  const [templateId, setTemplateId] = useState(uiState.templateId || '');
   const [templateDetailsLoading, setTemplateDetailsLoading] = useState(false);
   const [templateDetailsErr, setTemplateDetailsErr] = useState<unknown>(null);
   const [templateDetails, setTemplateDetails] = useState<DocTemplateDetailsResponse | null>(null);
@@ -158,6 +158,10 @@ export default function GofrDocDiscovery() {
   const [stylesLoading, setStylesLoading] = useState(false);
   const [stylesErr, setStylesErr] = useState<unknown>(null);
   const [styles, setStyles] = useState<DocListStylesResponse | null>(null);
+
+  useEffect(() => {
+    if (uiState.templateId && uiState.templateId !== templateId) setTemplateId(uiState.templateId);
+  }, [templateId, uiState.templateId]);
 
   useEffect(() => {
     logger.info({
@@ -491,10 +495,20 @@ export default function GofrDocDiscovery() {
                     <TableRow
                       key={t.template_id}
                       hover
+                      selected={t.template_id === templateId || t.template_id === uiState.templateId}
+                      role="button"
+                      tabIndex={0}
                       sx={{ cursor: 'pointer' }}
                       onClick={() => {
                         setTemplateId(t.template_id);
                         setUiState({ templateId: t.template_id });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setTemplateId(t.template_id);
+                          setUiState({ templateId: t.template_id });
+                        }
                       }}
                     >
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>{t.template_id}</TableCell>
@@ -511,7 +525,7 @@ export default function GofrDocDiscovery() {
             </Box>
           ) : templates ? (
             <Alert severity="info" sx={{ mt: 2 }}>
-              No templates returned.
+              No templates found.
             </Alert>
           ) : null}
 
@@ -630,9 +644,18 @@ export default function GofrDocDiscovery() {
                     <TableRow
                       key={s.style_id}
                       hover
+                      selected={s.style_id === uiState.styleId}
+                      role="button"
+                      tabIndex={0}
                       sx={{ cursor: 'pointer' }}
                       onClick={() => {
                         setUiState({ styleId: s.style_id });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setUiState({ styleId: s.style_id });
+                        }
                       }}
                     >
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>{s.style_id}</TableCell>
@@ -648,7 +671,7 @@ export default function GofrDocDiscovery() {
             </Box>
           ) : styles ? (
             <Alert severity="info" sx={{ mt: 2 }}>
-              No styles returned.
+              No styles found.
             </Alert>
           ) : null}
         </CardContent>
