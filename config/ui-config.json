@@ -121,12 +121,12 @@
     {
       "name": "all",
       "groups": "all",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIwOTRhYmRlOC0xN2ZkLTRlZjYtYmU1YS03NmRmZWE0Y2IwNTMiLCJncm91cHMiOlsiZ3JvdXAtc2ltdWxhdGlvbiJdLCJpYXQiOjE3NzA2NzMyMjAsImV4cCI6MTgwMjIwOTIyMCwibmJmIjoxNzcwNjczMjIwLCJhdWQiOiJnb2ZyLWFwaSJ9.-T1DlS2XkuknL1gQ0rkg654Apc9Ird_ov0fOWd42AW4"
+      "token": "REDACTED_TOKEN"
     },
     {
       "name": "admin",
       "groups": "admin",
-      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI5ZGEyZjk3Ni04YjRmLTRlNzQtOGNlOS03YjNkOWNhYjRlZDAiLCJncm91cHMiOlsiYWRtaW4iXSwiaWF0IjoxNzY5NzI2NjQ0LCJleHAiOjIwODUwODY2NDQsIm5iZiI6MTc2OTcyNjY0NCwiYXVkIjoiZ29mci1hcGkifQ.1DY75mere_IuvVYVOOSfCGqO1spzzFaDT_sjfHJZLf8"
+      "token": "REDACTED_TOKEN"
     }
   ]
 }

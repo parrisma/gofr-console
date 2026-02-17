@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Box, AppBar, Toolbar, Typography, Drawer, IconButton, Breadcrumbs, Link } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowBack, MonitorHeart, Storage, FileUpload, People, Dashboard } from '@mui/icons-material';
@@ -6,12 +7,12 @@ const drawerWidth = 60;
 
 interface ServiceShellNavItem {
   path: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
 }
 
 interface ServiceShellProps {
-  children: React.ReactNode;
+  children: ReactNode;
   serviceName: string;
   serviceRoute: string;
   navItems?: ServiceShellNavItem[];

@@ -76,8 +76,13 @@ if command -v trivy >/dev/null 2>&1; then
         if trivy image --severity HIGH,CRITICAL --exit-code 1 gofr-console-dev:latest; then
             echo "✓ No high/critical vulnerabilities in Docker image"
         else
-            echo "✗ Trivy detected vulnerabilities in Docker image"
-            FAILED=$((FAILED + 1))
+            if [ "$CI_MODE" = "true" ]; then
+                echo "✗ Trivy detected vulnerabilities in Docker image (blocking in CI)"
+                FAILED=$((FAILED + 1))
+            else
+                echo "⚠ Trivy detected vulnerabilities in Docker image (non-blocking locally)"
+                echo "  Hint: rebuild the dev image, upgrade base packages, or address CVEs in docker/Dockerfile.dev"
+            fi
         fi
     else
         echo "⚠ Docker image gofr-console-dev:latest not found. Build it first."

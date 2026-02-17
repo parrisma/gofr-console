@@ -38,6 +38,26 @@ import type {
   SessionUrlsResponse,
   StructureOptions,
 } from '../../types/gofrDig';
+import type {
+  DocAddFragmentResponse,
+  DocAddImageFragmentResponse,
+  DocAbortSessionResponse,
+  DocCreateSessionResponse,
+  DocFragmentDetailsResponse,
+  DocGetDocumentResponse,
+  DocListActiveSessionsResponse,
+  DocListSessionFragmentsResponse,
+  DocListStylesResponse,
+  DocListTemplateFragmentsResponse,
+  DocListTemplatesResponse,
+  DocParameterType,
+  DocPingResponse,
+  DocRemoveFragmentResponse,
+  DocSessionStatusResponse,
+  DocSetGlobalParametersResponse,
+  DocTemplateDetailsResponse,
+  DocValidateParametersResponse,
+} from '../../types/gofrDoc';
 
 // Dynamic base URL based on config
 function getBaseUrl(serviceName: string): string {
@@ -70,31 +90,38 @@ interface HealthCheckResult {
 }
 
 function summarizeArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const summary: Record<string, unknown> = {};
+  const entries: Array<[string, unknown]> = [];
+  let urlHost: string | null = null;
+
   for (const [key, value] of Object.entries(args)) {
     if (/token|authorization|secret|password|api[_-]?key|cookie/i.test(key)) continue;
+
     if (key === 'url' && typeof value === 'string') {
       try {
-        summary.url_host = new URL(value).host;
+        urlHost = new URL(value).host;
       } catch {
-        summary.url_host = value.split('?')[0];
+        urlHost = value.split('?')[0];
       }
       continue;
     }
+
     if (typeof value === 'string') {
-      summary[key] = value.length > 120 ? `${value.slice(0, 120)}...[TRUNCATED]` : value;
+      entries.push([key, value.length > 120 ? `${value.slice(0, 120)}...[TRUNCATED]` : value]);
       continue;
     }
     if (typeof value === 'number' || typeof value === 'boolean' || value == null) {
-      summary[key] = value;
+      entries.push([key, value]);
       continue;
     }
     if (Array.isArray(value)) {
-      summary[key] = `[array:${value.length}]`;
+      entries.push([key, `[array:${value.length}]`]);
       continue;
     }
-    summary[key] = '[object]';
+    entries.push([key, '[object]']);
   }
+
+  const summary = Object.fromEntries(entries) as Record<string, unknown>;
+  if (urlHost != null) summary.url_host = urlHost;
   return summary;
 }
 
@@ -147,13 +174,59 @@ function parseToolText<T>(
         } catch { /* keep as-is */ }
       }
     }
-    if (parsed.status === 'error') {
+    // Tool-level error shapes vary by service/version.
+    // Supported:
+    // - { status: 'error', error_code, message }
+    // - { success: false, error_code, error, recovery_strategy }
+    type ToolErrorShape = {
+      status?: unknown;
+      success?: unknown;
+      error_code?: unknown;
+      message?: unknown;
+      error?: unknown;
+      recovery_strategy?: unknown;
+      recovery?: unknown;
+      data?: unknown;
+    };
+
+    const obj: ToolErrorShape | null = parsed && typeof parsed === 'object' ? (parsed as ToolErrorShape) : null;
+
+    if (obj && obj.success === false) {
       throw new ApiError({
         service,
         tool,
-        code: parsed.error_code,
-        message: parsed.message || 'Tool returned error',
-        recovery: defaultRecoveryHint(),
+        code: typeof obj.error_code === 'string' || typeof obj.error_code === 'number' ? obj.error_code : undefined,
+        message:
+          typeof obj.error === 'string'
+            ? obj.error
+            : typeof obj.message === 'string'
+              ? obj.message
+              : 'Tool returned error',
+        recovery:
+          typeof obj.recovery_strategy === 'string'
+            ? obj.recovery_strategy
+            : typeof obj.recovery === 'string'
+              ? obj.recovery
+              : defaultRecoveryHint(),
+      });
+    }
+    if (obj && obj.status === 'error') {
+      throw new ApiError({
+        service,
+        tool,
+        code: typeof obj.error_code === 'string' || typeof obj.error_code === 'number' ? obj.error_code : undefined,
+        message:
+          typeof obj.message === 'string'
+            ? obj.message
+            : typeof obj.error === 'string'
+              ? obj.error
+              : 'Tool returned error',
+        recovery:
+          typeof obj.recovery_strategy === 'string'
+            ? obj.recovery_strategy
+            : typeof obj.recovery === 'string'
+              ? obj.recovery
+              : defaultRecoveryHint(),
       });
     }
     return (parsed.data || parsed) as T;
@@ -204,6 +277,10 @@ function parseToolText<T>(
     });
   }
 }
+
+// Test hook (intentionally not documented as public API)
+// Allows unit tests to validate MCP parsing behavior.
+export const __test__parseToolText = parseToolText;
 
 // Parse SSE response to get JSON-RPC message
 async function parseSseResponse<T>(response: Response): Promise<JsonRpcResponse<T>> {
@@ -635,6 +712,275 @@ export const api = {
     } catch {
       return defaultResponse;
     }
+  },
+
+  // ---------------------------------------------------------------------------
+  // GOFR-DOC (MCP)
+  // ---------------------------------------------------------------------------
+
+  docPing: async (): Promise<DocPingResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('ping', {});
+    const textContent = getTextContent(result, 'gofr-doc', 'ping');
+    return parseToolText<DocPingResponse>('gofr-doc', 'ping', textContent);
+  },
+
+  // Help is expected to be readable text; do not force JSON parsing.
+  docHelpText: async (): Promise<string> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('help', {});
+    return getTextContent(result, 'gofr-doc', 'help');
+  },
+
+  docListTemplates: async (): Promise<DocListTemplatesResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_templates', {});
+    const textContent = getTextContent(result, 'gofr-doc', 'list_templates');
+    return parseToolText<DocListTemplatesResponse>('gofr-doc', 'list_templates', textContent);
+  },
+
+  docGetTemplateDetails: async (
+    templateId: string,
+    authToken?: string
+  ): Promise<DocTemplateDetailsResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = { template_id: templateId };
+    if (authToken) {
+      params.auth_token = authToken;
+      params.token = authToken;
+    }
+    const result = await client.callTool<HealthCheckResult>('get_template_details', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'get_template_details');
+    return parseToolText<DocTemplateDetailsResponse>('gofr-doc', 'get_template_details', textContent);
+  },
+
+  docListTemplateFragments: async (
+    templateId: string,
+    authToken?: string
+  ): Promise<DocListTemplateFragmentsResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = { template_id: templateId };
+    if (authToken) {
+      params.auth_token = authToken;
+      params.token = authToken;
+    }
+    const result = await client.callTool<HealthCheckResult>('list_template_fragments', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'list_template_fragments');
+    return parseToolText<DocListTemplateFragmentsResponse>('gofr-doc', 'list_template_fragments', textContent);
+  },
+
+  docGetFragmentDetails: async (
+    templateId: string,
+    fragmentId: string,
+    authToken?: string
+  ): Promise<DocFragmentDetailsResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = { template_id: templateId, fragment_id: fragmentId };
+    if (authToken) {
+      params.auth_token = authToken;
+      params.token = authToken;
+    }
+    const result = await client.callTool<HealthCheckResult>('get_fragment_details', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'get_fragment_details');
+    return parseToolText<DocFragmentDetailsResponse>('gofr-doc', 'get_fragment_details', textContent);
+  },
+
+  docListStyles: async (): Promise<DocListStylesResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_styles', {});
+    const textContent = getTextContent(result, 'gofr-doc', 'list_styles');
+    return parseToolText<DocListStylesResponse>('gofr-doc', 'list_styles', textContent);
+  },
+
+  docCreateDocumentSession: async (
+    authToken: string,
+    templateId: string,
+    alias: string
+  ): Promise<DocCreateSessionResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = {
+      template_id: templateId,
+      alias,
+      auth_token: authToken,
+      token: authToken,
+    };
+    const result = await client.callTool<HealthCheckResult>('create_document_session', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'create_document_session');
+    return parseToolText<DocCreateSessionResponse>('gofr-doc', 'create_document_session', textContent);
+  },
+
+  docListActiveSessions: async (authToken: string): Promise<DocListActiveSessionsResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_active_sessions', {
+      auth_token: authToken,
+      token: authToken,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'list_active_sessions');
+    return parseToolText<DocListActiveSessionsResponse>('gofr-doc', 'list_active_sessions', textContent);
+  },
+
+  docGetSessionStatus: async (authToken: string, sessionId: string): Promise<DocSessionStatusResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('get_session_status', {
+      auth_token: authToken,
+      token: authToken,
+      session_id: sessionId,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'get_session_status');
+    return parseToolText<DocSessionStatusResponse>('gofr-doc', 'get_session_status', textContent);
+  },
+
+  docAbortDocumentSession: async (
+    authToken: string,
+    sessionId: string
+  ): Promise<DocAbortSessionResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('abort_document_session', {
+      auth_token: authToken,
+      token: authToken,
+      session_id: sessionId,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'abort_document_session');
+    return parseToolText<DocAbortSessionResponse>('gofr-doc', 'abort_document_session', textContent);
+  },
+
+  docValidateParameters: async (args: {
+    templateId: string;
+    parameterType: DocParameterType;
+    parameters: unknown;
+    fragmentId?: string;
+    authToken?: string;
+  }): Promise<DocValidateParametersResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = {
+      template_id: args.templateId,
+      parameter_type: args.parameterType,
+      parameters: args.parameters,
+    };
+    if (args.fragmentId) params.fragment_id = args.fragmentId;
+    if (args.authToken) {
+      params.auth_token = args.authToken;
+      params.token = args.authToken;
+    }
+    const result = await client.callTool<HealthCheckResult>('validate_parameters', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'validate_parameters');
+    return parseToolText<DocValidateParametersResponse>('gofr-doc', 'validate_parameters', textContent);
+  },
+
+  docSetGlobalParameters: async (
+    authToken: string,
+    sessionId: string,
+    parameters: unknown
+  ): Promise<DocSetGlobalParametersResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('set_global_parameters', {
+      auth_token: authToken,
+      token: authToken,
+      session_id: sessionId,
+      parameters,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'set_global_parameters');
+    return parseToolText<DocSetGlobalParametersResponse>('gofr-doc', 'set_global_parameters', textContent);
+  },
+
+  docAddFragment: async (authToken: string, args: {
+    sessionId: string;
+    fragmentId: string;
+    parameters: unknown;
+    position?: string;
+  }): Promise<DocAddFragmentResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = {
+      auth_token: authToken,
+      token: authToken,
+      session_id: args.sessionId,
+      fragment_id: args.fragmentId,
+      parameters: args.parameters,
+    };
+    if (args.position) params.position = args.position;
+    const result = await client.callTool<HealthCheckResult>('add_fragment', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'add_fragment');
+    return parseToolText<DocAddFragmentResponse>('gofr-doc', 'add_fragment', textContent);
+  },
+
+  docAddImageFragment: async (authToken: string, args: {
+    sessionId: string;
+    imageUrl: string;
+    title?: string;
+    altText?: string;
+    alignment?: string;
+    requireHttps?: boolean;
+    width?: number;
+    height?: number;
+    position?: string;
+  }): Promise<DocAddImageFragmentResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = {
+      auth_token: authToken,
+      token: authToken,
+      session_id: args.sessionId,
+      image_url: args.imageUrl,
+    };
+    if (args.title) params.title = args.title;
+    if (args.altText) params.alt_text = args.altText;
+    if (args.alignment) params.alignment = args.alignment;
+    if (args.requireHttps != null) params.require_https = args.requireHttps;
+    if (args.width != null) params.width = args.width;
+    if (args.height != null) params.height = args.height;
+    if (args.position) params.position = args.position;
+    const result = await client.callTool<HealthCheckResult>('add_image_fragment', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'add_image_fragment');
+    return parseToolText<DocAddImageFragmentResponse>('gofr-doc', 'add_image_fragment', textContent);
+  },
+
+  docListSessionFragments: async (
+    authToken: string,
+    sessionId: string
+  ): Promise<DocListSessionFragmentsResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_session_fragments', {
+      auth_token: authToken,
+      token: authToken,
+      session_id: sessionId,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'list_session_fragments');
+    return parseToolText<DocListSessionFragmentsResponse>('gofr-doc', 'list_session_fragments', textContent);
+  },
+
+  docRemoveFragment: async (
+    authToken: string,
+    sessionId: string,
+    fragmentInstanceGuid: string
+  ): Promise<DocRemoveFragmentResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('remove_fragment', {
+      auth_token: authToken,
+      token: authToken,
+      session_id: sessionId,
+      fragment_instance_guid: fragmentInstanceGuid,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'remove_fragment');
+    return parseToolText<DocRemoveFragmentResponse>('gofr-doc', 'remove_fragment', textContent);
+  },
+
+  docGetDocument: async (authToken: string, args: {
+    sessionId: string;
+    format: 'html' | 'md' | 'pdf';
+    styleId?: string;
+    proxy?: boolean;
+  }): Promise<DocGetDocumentResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const params: Record<string, unknown> = {
+      auth_token: authToken,
+      token: authToken,
+      session_id: args.sessionId,
+      format: args.format,
+    };
+    if (args.styleId) params.style_id = args.styleId;
+    if (args.proxy != null) params.proxy = args.proxy;
+    const result = await client.callTool<HealthCheckResult>('get_document', params);
+    const textContent = getTextContent(result, 'gofr-doc', 'get_document');
+    return parseToolText<DocGetDocumentResponse>('gofr-doc', 'get_document', textContent);
   },
 
   // Get current environment info

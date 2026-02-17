@@ -29,7 +29,7 @@ import {
   Paper,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import { logger } from '../services/logging';
@@ -94,6 +94,10 @@ function formatToolError(tool: string, err: unknown, fallback: string): string {
 
 export default function GofrDig() {
   const { tokens } = useConfig();
+
+  const tokenSelectRef = useRef<HTMLInputElement | null>(null);
+  const urlInputRef = useRef<HTMLInputElement | null>(null);
+  const tokenUrlCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     logger.info({
@@ -341,6 +345,47 @@ export default function GofrDig() {
         Test and explore GOFR-DIG scraping features via MCP before automating workflows.
       </Typography>
 
+      <Card sx={{ mt: 2 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Quick start
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Typical flow: Token + URL → Anti-detection → Structure → Content → Sessions.
+          </Typography>
+          <Box component="ol" sx={{ mt: 0, mb: 2, pl: 2 }}>
+            <li>
+              <Typography variant="body2">Select a token (this defines the storage/access group)</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Paste the URL you want to scrape</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Apply anti-detection settings</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Analyse structure (optional selectors)</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Fetch content (use session mode for large scrapes)</Typography>
+            </li>
+          </Box>
+          <Button
+            variant="contained"
+            onClick={() => {
+              tokenUrlCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+              if (selectedToken) {
+                urlInputRef.current?.focus();
+              } else {
+                tokenSelectRef.current?.focus();
+              }
+            }}
+          >
+            {selectedToken ? 'Enter a URL' : 'Select a token'}
+          </Button>
+        </CardContent>
+      </Card>
+
       <Alert severity="info" icon={false} sx={{ mt: 1, '& .MuiAlert-message': { width: '100%' } }}>
         <Typography variant="subtitle2" sx={{ mb: 0.5 }}>How it works</Typography>
         <Typography variant="body2" color="text.secondary">
@@ -354,7 +399,7 @@ export default function GofrDig() {
       </Alert>
 
       {/* ① Token & Target */}
-      <Card sx={{ mt: 3 }}>
+      <Card sx={{ mt: 3 }} ref={tokenUrlCardRef}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 1 }}>
             <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>①</Box>
@@ -372,6 +417,7 @@ export default function GofrDig() {
                 value={selectedTokenIndex}
                 label="Token"
                 onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
+                inputRef={tokenSelectRef}
               >
                 <MenuItem value={-1}>
                   <em>Select token</em>
@@ -393,6 +439,7 @@ export default function GofrDig() {
             placeholder="https://example.com"
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
+            inputRef={urlInputRef}
             fullWidth
             disabled={!selectedToken}
           />

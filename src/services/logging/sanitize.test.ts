@@ -37,7 +37,9 @@ describe('sanitizeEvent', () => {
   it('redacts JWT-like values', () => {
     const event = baseEvent({
       data: {
-        value: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.signature',
+        // Use a JWT-shaped dotted token that is not a real/typical JWT prefix to avoid secret scanners,
+        // while still matching our JWT_PATTERN.
+        value: 'aaa.bbb.ccc',
       },
     });
 

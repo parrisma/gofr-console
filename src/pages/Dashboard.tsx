@@ -26,7 +26,7 @@ export default function Dashboard() {
     { name: 'GOFR-IQ', label: 'Intelligence', status: health?.services.neo4j?.status, route: '/gofr-iq/health' },
     { name: 'GOFR-DIG', label: 'Data Ingestion', status: 'up', route: '/gofr-dig' },
     { name: 'GOFR-PLOT', label: 'Visualization', status: 'up', route: null },
-    { name: 'GOFR-DOC', label: 'Documentation', status: health?.services.chromadb?.status, route: null },
+    { name: 'GOFR-DOC', label: 'Documentation', status: health?.services.chromadb?.status, route: '/gofr-doc' },
     { name: 'GOFR-NP', label: 'Network & Policy', status: health?.services.llm?.status, route: null },
   ];
 
