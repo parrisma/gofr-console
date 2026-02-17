@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 import { uiConfigPlugin } from "./vite/ui-config-plugin";
 import { execSync } from "node:child_process";
 
+const disableHmr = process.env.GOFR_DISABLE_HMR === "1" || process.env.VITE_DISABLE_HMR === "1";
+
 // Auto-incrementing build number from git
 function gitBuildInfo() {
   try {
@@ -56,6 +58,7 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 3000,
+    hmr: disableHmr ? false : undefined,
     proxy: proxyConfig,
   },
 });

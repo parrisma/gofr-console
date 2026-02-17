@@ -66,6 +66,7 @@ Thumbs.db
 
 # Vite
 *.local
+.vite.pid
 
 # Package manager locks (keep pnpm-lock.yaml)
 # package-lock.json

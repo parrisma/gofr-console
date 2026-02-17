@@ -8,17 +8,13 @@ import {
   Alert,
   TextField,
   InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Tabs,
   Tab,
   List,
   ListItemButton,
   ListItemText,
-  IconButton,
   Divider,
+  IconButton,
   Table,
   TableBody,
   TableRow,
@@ -29,6 +25,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
+import TokenSelect from '../components/common/TokenSelect';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type { ClientSummary, ClientProfileResponse } from '../types/gofrIQ';
 
 /** Flattened view of client profile for display */
@@ -221,38 +219,26 @@ export default function GofrIQClients() {
 
         <CardContent>
           {/* Token Selection - shown in both tabs */}
-          <FormControl fullWidth size="small" sx={{ mb: 3 }}>
-            <InputLabel>Token (Group)</InputLabel>
-            <Select
-              value={selectedTokenIndex >= 0 ? selectedTokenIndex : ''}
-              label="Token (Group)"
-              onChange={(e) => {
-                setSelectedTokenIndex(Number(e.target.value));
-                handleBackToList();
-              }}
-              disabled={tokens.length === 0}
-            >
-              {tokens.length === 0 && (
-                <MenuItem disabled>No tokens available</MenuItem>
-              )}
-              {tokens.map((token: JwtToken, index: number) => (
-                <MenuItem key={index} value={index}>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    <span>{token.name}</span>
-                    <Chip label={token.groups} size="small" color="secondary" variant="outlined" />
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <TokenSelect
+            label="Token (Group)"
+            tokens={tokens}
+            value={selectedTokenIndex}
+            onChange={(idx) => {
+              setSelectedTokenIndex(idx);
+              handleBackToList();
+            }}
+            allowNone={false}
+            noneLabel={tokens.length === 0 ? 'No tokens available' : 'Select token'}
+            disabled={tokens.length === 0}
+            fullWidth
+            sx={{ mb: 3 }}
+          />
 
           {/* LIST TAB */}
           {activeTab === 0 && (
             <Box>
               {error && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {error}
-                </Alert>
+                <ToolErrorAlert err={error} fallback="list_clients failed" severity="warning" />
               )}
 
               {!selectedToken && (
@@ -337,9 +323,7 @@ export default function GofrIQClients() {
               )}
 
               {profileError && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {profileError}
-                </Alert>
+                <ToolErrorAlert err={profileError} fallback="get_client_profile failed" severity="warning" />
               )}
 
               {clientProfile && !profileLoading && (

@@ -18,4 +18,15 @@ export const theme = createTheme({
     h5: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
     h6: { fontFamily: "'Sora', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif" },
   },
+  components: {
+    MuiTableCell: {
+      styleOverrides: {
+        head: ({ theme }) => ({
+          fontWeight: 700,
+          backgroundColor: theme.palette.action.hover,
+          borderBottom: `2px solid ${theme.palette.divider}`,
+        }),
+      },
+    },
+  },
 });

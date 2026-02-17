@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import AppShell from './components/layout/AppShell';
 import ServiceShell from './components/layout/ServiceShell';
 import GlobalErrorBoundary from './components/common/GlobalErrorBoundary';
@@ -14,7 +14,12 @@ import Client360View from './pages/Client360View';
 import GofrDig from './pages/GofrDig';
 import GofrDigHealthCheck from './pages/GofrDigHealthCheck';
 import GofrDigSessions from './pages/GofrDigSessions';
-import { MonitorHeart, Search, Storage } from '@mui/icons-material';
+import GofrDocHealthCheck from './pages/GofrDocHealthCheck';
+import GofrDocDiscovery from './pages/GofrDocDiscovery';
+import GofrDocSessions from './pages/GofrDocSessions';
+import GofrDocBuilder from './pages/GofrDocBuilder';
+import GofrDocRenderProxy from './pages/GofrDocRenderProxy';
+import { MonitorHeart, Search, Storage, Build, Description } from '@mui/icons-material';
 import { logger } from './services/logging';
 
 function RouteChangeLogger() {
@@ -37,13 +42,27 @@ function RouteChangeLogger() {
 }
 
 function App() {
+  const gofrDigNavItems = [
+    { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
+    { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
+    { path: '/gofr-dig/sessions', icon: <Storage />, label: 'Sessions' },
+  ];
+
+  const gofrDocNavItems = [
+    { path: '/gofr-doc/health', icon: <MonitorHeart />, label: 'Health' },
+    { path: '/gofr-doc/discovery', icon: <Search />, label: 'Discovery' },
+    { path: '/gofr-doc/sessions', icon: <Storage />, label: 'Sessions' },
+    { path: '/gofr-doc/builder', icon: <Build />, label: 'Builder' },
+    { path: '/gofr-doc/render', icon: <Description />, label: 'Render' },
+  ];
+
   return (
     <BrowserRouter>
       <RouteChangeLogger />
       <GlobalErrorBoundary>
-      <Routes>
-        <Route path="/" element={<AppShell><Dashboard /></AppShell>} />
-        <Route path="/operations" element={<AppShell><Operations /></AppShell>} />
+        <Routes>
+          <Route path="/" element={<AppShell><Dashboard /></AppShell>} />
+          <Route path="/operations" element={<AppShell><Operations /></AppShell>} />
         <Route path="/gofr-iq/health" element={
           <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQ />
@@ -78,11 +97,7 @@ function App() {
           <ServiceShell
             serviceName="GOFR-DIG"
             serviceRoute="/gofr-dig"
-            navItems={[
-              { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
-              { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
-              { path: '/gofr-dig/sessions', icon: <Storage />, label: 'Sessions' },
-            ]}
+            navItems={gofrDigNavItems}
           >
             <GofrDig />
           </ServiceShell>
@@ -91,11 +106,7 @@ function App() {
           <ServiceShell
             serviceName="GOFR-DIG"
             serviceRoute="/gofr-dig"
-            navItems={[
-              { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
-              { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
-              { path: '/gofr-dig/sessions', icon: <Storage />, label: 'Sessions' },
-            ]}
+            navItems={gofrDigNavItems}
           >
             <GofrDigHealthCheck />
           </ServiceShell>
@@ -104,19 +115,62 @@ function App() {
           <ServiceShell
             serviceName="GOFR-DIG"
             serviceRoute="/gofr-dig"
-            navItems={[
-              { path: '/gofr-dig/health', icon: <MonitorHeart />, label: 'Health' },
-              { path: '/gofr-dig', icon: <Search />, label: 'Scraper' },
-              { path: '/gofr-dig/sessions', icon: <Storage />, label: 'Sessions' },
-            ]}
+            navItems={gofrDigNavItems}
           >
             <GofrDigSessions />
           </ServiceShell>
         } />
-      </Routes>
+
+        <Route path="/gofr-doc" element={<Navigate to="/gofr-doc/sessions" replace />} />
+        <Route path="/gofr-doc/health" element={
+          <ServiceShell
+            serviceName="GOFR-DOC"
+            serviceRoute="/gofr-doc"
+            navItems={gofrDocNavItems}
+          >
+            <GofrDocHealthCheck />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-doc/discovery" element={
+          <ServiceShell
+            serviceName="GOFR-DOC"
+            serviceRoute="/gofr-doc"
+            navItems={gofrDocNavItems}
+          >
+            <GofrDocDiscovery />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-doc/sessions" element={
+          <ServiceShell
+            serviceName="GOFR-DOC"
+            serviceRoute="/gofr-doc"
+            navItems={gofrDocNavItems}
+          >
+            <GofrDocSessions />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-doc/builder" element={
+          <ServiceShell
+            serviceName="GOFR-DOC"
+            serviceRoute="/gofr-doc"
+            navItems={gofrDocNavItems}
+          >
+            <GofrDocBuilder />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-doc/render" element={
+          <ServiceShell
+            serviceName="GOFR-DOC"
+            serviceRoute="/gofr-doc"
+            navItems={gofrDocNavItems}
+          >
+            <GofrDocRenderProxy />
+          </ServiceShell>
+        } />
+        </Routes>
       </GlobalErrorBoundary>
     </BrowserRouter>
   );
 }
 
-export default App
+export default App;

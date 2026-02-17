@@ -45,11 +45,11 @@ function emit(input: LogEventInput): void {
   if (!DEFAULT_CONFIG.enabled) {
     if (import.meta.env.DEV) {
       if (event.level === 'error') {
-        console.error(`[${event.event}] ${event.message}`, event);
+        console.error('[log]', event.event, event.message, event);
       } else if (event.level === 'warn') {
-        console.warn(`[${event.event}] ${event.message}`, event);
+        console.warn('[log]', event.event, event.message, event);
       } else {
-        console.log(`[${event.event}] ${event.message}`, event);
+        console.log('[log]', event.event, event.message, event);
       }
     }
     return;

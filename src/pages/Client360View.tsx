@@ -1,28 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
   Alert,
   AlertTitle,
   CircularProgress,
+  Card,
+  CardContent,
   List,
   ListItem,
   ListItemButton,
   ListItemText,
   Paper,
   Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
+  Button,
   Snackbar,
 } from '@mui/material';
+import TokenSelect from '../components/common/TokenSelect';
 import ClientHeader from '../components/common/ClientHeader';
 import ClientProfileEditDialog from '../components/client/ClientProfileEditDialog';
 import { PortfolioPanel } from '../components/common/PortfolioPanel';
 import { WatchlistPanel } from '../components/common/WatchlistPanel';
 import { ClientNewsPanel } from '../components/common/ClientNewsPanel';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
@@ -64,6 +64,9 @@ function mapProfileScore(response: ProfileScoreResponse): ProfileScore | null {
 
 export default function Client360View() {
   const { tokens } = useConfig();
+
+  const tokenSelectRef = useRef<HTMLInputElement | null>(null);
+  const clientListRef = useRef<HTMLDivElement | null>(null);
   
   // Token selection
   const [selectedTokenIndex, setSelectedTokenIndex] = useState<number>(-1);
@@ -287,10 +290,7 @@ export default function Client360View() {
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          <AlertTitle>Error Loading Clients</AlertTitle>
-          {error}
-        </Alert>
+        <ToolErrorAlert err={error} fallback="Error loading clients" />
       </Box>
     );
   }
@@ -302,33 +302,63 @@ export default function Client360View() {
       <Typography variant="h4" gutterBottom>
         Client 360 View
       </Typography>
+
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Quick start
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Typical flow: select a token → select a client → review portfolio, watchlist, and news.
+          </Typography>
+          <Box component="ol" sx={{ mt: 0, mb: 2, pl: 2 }}>
+            <li>
+              <Typography variant="body2">Select a token (this controls which client group you can see)</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Pick a client from the list</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Use the panels to review holdings, watchlist, and client news</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Edit mandate/restrictions to tailor outputs for professional clients</Typography>
+            </li>
+          </Box>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (!selectedToken?.token) {
+                tokenSelectRef.current?.focus();
+                return;
+              }
+              if (!selectedClient) {
+                clientListRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+              }
+            }}
+          >
+            {!selectedToken?.token ? 'Select a token' : !selectedClient ? 'Pick a client' : 'Review client details'}
+          </Button>
+        </CardContent>
+      </Card>
       
       {/* Token Selection */}
-      <FormControl fullWidth size="small" sx={{ mb: 3, maxWidth: 400 }}>
-        <InputLabel>Token (Group)</InputLabel>
-        <Select
-          value={selectedTokenIndex >= 0 ? selectedTokenIndex : ''}
-          label="Token (Group)"
-          onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
-          disabled={tokens.length === 0}
-        >
-          {tokens.length === 0 && (
-            <MenuItem disabled>No tokens available</MenuItem>
-          )}
-          {tokens.map((token: JwtToken, index: number) => (
-            <MenuItem key={index} value={index}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <span>{token.name}</span>
-                <Chip label={token.groups} size="small" color="secondary" variant="outlined" />
-              </Box>
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      <TokenSelect
+        label="Token (Group)"
+        tokens={tokens}
+        value={selectedTokenIndex}
+        onChange={setSelectedTokenIndex}
+        allowNone={false}
+        noneLabel={tokens.length === 0 ? 'No tokens available' : 'Select token'}
+        disabled={tokens.length === 0}
+        fullWidth
+        sx={{ mb: 3, maxWidth: 400 }}
+        inputRef={tokenSelectRef}
+      />
 
       <Box sx={{ display: 'flex', gap: 3, mt: 3 }}>
         {/* Left Sidebar: Client List */}
-        <Paper sx={{ width: 300, flexShrink: 0 }}>
+        <Paper sx={{ width: 300, flexShrink: 0 }} ref={clientListRef}>
           <Box sx={{ p: 2, bgcolor: 'primary.main', color: 'white' }}>
             <Typography variant="h6">Clients</Typography>
           </Box>

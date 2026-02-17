@@ -24,6 +24,8 @@ import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import { logger } from '../services/logging';
 import type { JwtToken } from '../stores/configStore';
+import TokenSelect from '../components/common/TokenSelect';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type {
   GetSessionResponse,
   SessionChunkRef,
@@ -287,21 +289,15 @@ export default function GofrDigSessions() {
             <FieldTip tip="Select a token to authenticate with gofr-dig. Sessions are scoped to the token's access group." />
           </Box>
           <Box display="flex" gap={2} alignItems="center">
-            <TextField
-              select
+            <TokenSelect
               label="Token"
+              tokens={tokens}
               value={selectedTokenIndex}
-              onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
-              sx={{ minWidth: 240 }}
-              SelectProps={{ native: true }}
-            >
-              <option value={-1}>Select token</option>
-              {tokens.map((token, index) => (
-                <option key={token.name} value={index}>
-                  {token.name}
-                </option>
-              ))}
-            </TextField>
+              onChange={setSelectedTokenIndex}
+              allowNone={false}
+              noneLabel="Select token"
+              minWidth={240}
+            />
             <Button
               variant="contained"
               onClick={handleListSessions}
@@ -323,9 +319,7 @@ export default function GofrDigSessions() {
           </Box>
 
           {sessionsListError && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {sessionsListError}
-            </Alert>
+            <ToolErrorAlert err={sessionsListError} fallback="list_sessions failed" />
           )}
 
           {sessionsList.length > 0 ? (
@@ -415,9 +409,7 @@ export default function GofrDigSessions() {
           </Box>
 
           {sessionError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {sessionError}
-            </Alert>
+            <ToolErrorAlert err={sessionError} fallback="session operation failed" />
           )}
 
           {/* Two-pane layout: info panel (left) + content reader (right) */}

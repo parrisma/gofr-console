@@ -29,11 +29,14 @@ import {
   Paper,
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import { logger } from '../services/logging';
 import type { JwtToken } from '../stores/configStore';
+import TokenSelect from '../components/common/TokenSelect';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
+import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
 import type {
   AntiDetectionResponse,
   ContentResponse,
@@ -94,6 +97,10 @@ function formatToolError(tool: string, err: unknown, fallback: string): string {
 
 export default function GofrDig() {
   const { tokens } = useConfig();
+
+  const tokenSelectRef = useRef<HTMLInputElement | null>(null);
+  const urlInputRef = useRef<HTMLInputElement | null>(null);
+  const tokenUrlCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     logger.info({
@@ -341,20 +348,61 @@ export default function GofrDig() {
         Test and explore GOFR-DIG scraping features via MCP before automating workflows.
       </Typography>
 
+      <Card sx={{ mt: 2 }}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Quick start
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Typical flow: Token + URL → Anti-detection → Structure → Content → Sessions.
+          </Typography>
+          <Box component="ol" sx={{ mt: 0, mb: 2, pl: 2 }}>
+            <li>
+              <Typography variant="body2">Select a token (this defines the storage/access group)</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Paste the URL you want to scrape</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Apply anti-detection settings</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Analyse structure (optional selectors)</Typography>
+            </li>
+            <li>
+              <Typography variant="body2">Fetch content (use session mode for large scrapes)</Typography>
+            </li>
+          </Box>
+          <Button
+            variant="contained"
+            onClick={() => {
+              tokenUrlCardRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+              if (selectedToken) {
+                urlInputRef.current?.focus();
+              } else {
+                tokenSelectRef.current?.focus();
+              }
+            }}
+          >
+            {selectedToken ? 'Enter a URL' : 'Select a token'}
+          </Button>
+        </CardContent>
+      </Card>
+
       <Alert severity="info" icon={false} sx={{ mt: 1, '& .MuiAlert-message': { width: '100%' } }}>
         <Typography variant="subtitle2" sx={{ mb: 0.5 }}>How it works</Typography>
         <Typography variant="body2" color="text.secondary">
           <strong>① Pick a token</strong> — this determines which access group the scraped material belongs to.
           <strong>② Set anti-detection</strong> — configure how requests appear to the target site.
-          <strong>③ Analyse structure</strong> — preview the page layout and find the right CSS selectors.
-          <strong>④ Extract content</strong> — pull the actual text, links, and metadata.
+          <strong>③ Preview structure</strong> — scan the page layout and find the right CSS selectors.
+          <strong>④ Extract content</strong> — pull the text, links, and metadata.
           <strong>⑤ Review sessions</strong> — browse chunked results from large scrapes.
           Each step builds on the previous one; start from the top and work down.
         </Typography>
       </Alert>
 
       {/* ① Token & Target */}
-      <Card sx={{ mt: 3 }}>
+      <Card sx={{ mt: 3 }} ref={tokenUrlCardRef}>
         <CardContent>
           <Typography variant="h6" sx={{ mb: 1 }}>
             <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>①</Box>
@@ -365,24 +413,16 @@ export default function GofrDig() {
           </Typography>
 
           <Box display="flex" alignItems="flex-start" gap={1} sx={{ mb: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel id="dig-token-label">Token</InputLabel>
-              <Select
-                labelId="dig-token-label"
-                value={selectedTokenIndex}
-                label="Token"
-                onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
-              >
-                <MenuItem value={-1}>
-                  <em>Select token</em>
-                </MenuItem>
-                {tokens.map((token, index) => (
-                  <MenuItem key={token.name} value={index}>
-                    {token.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TokenSelect
+              label="Token"
+              tokens={tokens}
+              value={selectedTokenIndex}
+              onChange={setSelectedTokenIndex}
+              allowNone={false}
+              noneLabel="Select token"
+              fullWidth
+              inputRef={tokenSelectRef}
+            />
             <Box sx={{ pt: 2 }}>
               <FieldTip tip="The token determines which access group the scraped content is stored under. Only users with access to that group can view, search, or use the material. Choose the token that matches the intended audience." />
             </Box>
@@ -393,6 +433,7 @@ export default function GofrDig() {
             placeholder="https://example.com"
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
+            inputRef={urlInputRef}
             fullWidth
             disabled={!selectedToken}
           />
@@ -405,9 +446,12 @@ export default function GofrDig() {
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Typography variant="h6">
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>②</Box>
-              Anti-Detection Settings
+              Anti-detection
             </Typography>
-            {antiLoading && <CircularProgress size={20} />}
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+              <RawResponsePopupIcon title="Raw set_antidetection response" data={antiResponse} />
+              {antiLoading && <CircularProgress size={20} />}
+            </Box>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Configure scraping profile before fetching. Applied server-side for the session.
@@ -475,16 +519,12 @@ export default function GofrDig() {
           )}
 
           {antiError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {antiError}
-            </Alert>
+            <ToolErrorAlert err={antiError} fallback="set_antidetection failed" />
           )}
 
           <Button variant="contained" sx={{ mt: 2 }} onClick={handleApplyAntiDetection} disabled={antiLoading}>
-            Apply Settings
+            Apply anti-detection
           </Button>
-
-          <JsonBlock data={antiResponse} />
         </CardContent>
       </Card>
 
@@ -494,9 +534,12 @@ export default function GofrDig() {
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Typography variant="h6">
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>③</Box>
-              Structure Discovery
+              Preview structure
             </Typography>
-            {structureLoading && <CircularProgress size={20} />}
+            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+              <RawResponsePopupIcon title="Raw get_structure response" data={structureResponse} />
+              {structureLoading && <CircularProgress size={20} />}
+            </Box>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Analyse the page layout of <strong>{targetUrl || '(enter URL above)'}</strong> before extracting content.
@@ -545,20 +588,17 @@ export default function GofrDig() {
           </Box>
 
           {structureError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {structureError}
-            </Alert>
+            <ToolErrorAlert err={structureError} fallback="get_structure failed" />
           )}
 
           <Button variant="contained" sx={{ mt: 2 }} onClick={handleAnalyzeStructure} disabled={structureLoading}>
-            Analyze Structure
+            Preview structure
           </Button>
 
           {structureResponse?.language && (
             <Chip label={`Language: ${structureResponse.language}`} size="small" sx={{ mt: 2, ml: 1 }} />
           )}
 
-          <JsonBlock data={structureResponse} />
         </CardContent>
       </Card>
 
@@ -568,7 +608,7 @@ export default function GofrDig() {
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Typography variant="h6">
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>④</Box>
-              Content Extraction
+              Extract content
             </Typography>
             {contentLoading && <CircularProgress size={20} />}
           </Box>
@@ -688,14 +728,12 @@ export default function GofrDig() {
           )}
 
           {contentError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {contentError}
-            </Alert>
+            <ToolErrorAlert err={contentError} fallback="get_content failed" />
           )}
 
           <Box display="flex" alignItems="center" gap={2} mt={2}>
             <Button variant="contained" onClick={handleFetchContent} disabled={contentLoading}>
-              Fetch Content
+              Extract content
             </Button>
             <Tooltip
               title={
