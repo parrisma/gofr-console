@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Box, Card, CardContent, Typography, Grid } from '@mui/material';
+import { Box, Button, Card, CardContent, Typography, Grid } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
@@ -23,11 +23,46 @@ export default function Dashboard() {
   }, []);
 
   const services = [
-    { name: 'GOFR-IQ', label: 'Intelligence', status: health?.services.neo4j?.status, route: '/gofr-iq/health' },
-    { name: 'GOFR-DIG', label: 'Data Ingestion', status: 'up', route: '/gofr-dig' },
-    { name: 'GOFR-PLOT', label: 'Visualization', status: 'up', route: null },
-    { name: 'GOFR-DOC', label: 'Documentation', status: health?.services.chromadb?.status, route: '/gofr-doc' },
-    { name: 'GOFR-NP', label: 'Network & Policy', status: health?.services.llm?.status, route: null },
+    {
+      name: 'GOFR-IQ',
+      label: 'Intelligence',
+      status: health?.services.neo4j?.status,
+      route: '/gofr-iq/health',
+      nextAction: 'Open Client 360',
+      nextRoute: '/gofr-iq/client-360',
+    },
+    {
+      name: 'GOFR-DIG',
+      label: 'Data Ingestion',
+      status: 'up',
+      route: '/gofr-dig',
+      nextAction: 'Scrape a URL',
+      nextRoute: '/gofr-dig',
+    },
+    {
+      name: 'GOFR-PLOT',
+      label: 'Visualization',
+      status: 'up',
+      route: null,
+      nextAction: 'Coming soon',
+      nextRoute: null,
+    },
+    {
+      name: 'GOFR-DOC',
+      label: 'Documentation',
+      status: health?.services.chromadb?.status,
+      route: '/gofr-doc',
+      nextAction: 'Create a doc session',
+      nextRoute: '/gofr-doc/sessions',
+    },
+    {
+      name: 'GOFR-NP',
+      label: 'Network & Policy',
+      status: health?.services.llm?.status,
+      route: null,
+      nextAction: 'Coming soon',
+      nextRoute: null,
+    },
   ];
 
   return (
@@ -49,6 +84,29 @@ export default function Dashboard() {
         </Box>
       </Box>
       <Grid container spacing={2}>
+        <Grid size={{ xs: 12 }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Getting started
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Start with the most common workflows.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Button variant="contained" onClick={() => navigate('/gofr-iq/client-360')}>
+                  Open Client 360
+                </Button>
+                <Button variant="contained" onClick={() => navigate('/gofr-dig')}>
+                  Scrape a URL
+                </Button>
+                <Button variant="contained" onClick={() => navigate('/gofr-doc/sessions')}>
+                  Create Doc Session
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
         {services.map((service) => (
           <Grid size={{ xs: 12, sm: 6, md: 4 }} key={service.name}>
             <Card
@@ -69,6 +127,9 @@ export default function Dashboard() {
                     <Typography variant="h6">{service.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
                       {service.label}: Online
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                      Next: {service.nextAction}
                     </Typography>
                   </Box>
                 </Box>
