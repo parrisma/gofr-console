@@ -36,8 +36,8 @@ Last updated: 2026-02-17
    - Phase 1b (GOFR-DIG Scraper Quick Start): Done
    - Phase 1c (GOFR-IQ Client 360 Quick Start): Done
 - Phase 2 (Standardized TokenSelect): Done
-- Phase 3 (Unified error display): In progress
-- Phase 4 (Progressive disclosure for raw JSON): Not started
+- Phase 3 (Unified error display): Done
+- Phase 4 (Progressive disclosure for raw JSON): In progress
 - Phase 5 (GOFR-DOC context strip): Not started
 - Phase 6 (Dashboard task launcher): Not started
 - Phase 7 (Consistent help affordance): Not started

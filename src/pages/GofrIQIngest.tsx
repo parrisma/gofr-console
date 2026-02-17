@@ -21,6 +21,7 @@ import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
 import TokenSelect from '../components/common/TokenSelect';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type { Source, IngestResult } from '../types/gofrIQ';
 
 export default function GofrIQIngest() {
@@ -377,9 +378,12 @@ export default function GofrIQIngest() {
 
           {/* Error */}
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-              {error}
-            </Alert>
+            <ToolErrorAlert
+              err={error}
+              fallback="ingest failed"
+              severity="error"
+              onClose={() => setError(null)}
+            />
           )}
 
           {/* Actions */}

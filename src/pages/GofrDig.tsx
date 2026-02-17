@@ -35,6 +35,7 @@ import { useConfig } from '../hooks/useConfig';
 import { logger } from '../services/logging';
 import type { JwtToken } from '../stores/configStore';
 import TokenSelect from '../components/common/TokenSelect';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type {
   AntiDetectionResponse,
   ContentResponse,
@@ -514,9 +515,7 @@ export default function GofrDig() {
           )}
 
           {antiError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {antiError}
-            </Alert>
+            <ToolErrorAlert err={antiError} fallback="set_antidetection failed" />
           )}
 
           <Button variant="contained" sx={{ mt: 2 }} onClick={handleApplyAntiDetection} disabled={antiLoading}>
@@ -584,9 +583,7 @@ export default function GofrDig() {
           </Box>
 
           {structureError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {structureError}
-            </Alert>
+            <ToolErrorAlert err={structureError} fallback="get_structure failed" />
           )}
 
           <Button variant="contained" sx={{ mt: 2 }} onClick={handleAnalyzeStructure} disabled={structureLoading}>
@@ -727,9 +724,7 @@ export default function GofrDig() {
           )}
 
           {contentError && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {contentError}
-            </Alert>
+            <ToolErrorAlert err={contentError} fallback="get_content failed" />
           )}
 
           <Box display="flex" alignItems="center" gap={2} mt={2}>

@@ -26,6 +26,7 @@ import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
 import TokenSelect from '../components/common/TokenSelect';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type { ClientSummary, ClientProfileResponse } from '../types/gofrIQ';
 
 /** Flattened view of client profile for display */
@@ -237,9 +238,7 @@ export default function GofrIQClients() {
           {activeTab === 0 && (
             <Box>
               {error && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {error}
-                </Alert>
+                <ToolErrorAlert err={error} fallback="list_clients failed" severity="warning" />
               )}
 
               {!selectedToken && (
@@ -324,9 +323,7 @@ export default function GofrIQClients() {
               )}
 
               {profileError && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {profileError}
-                </Alert>
+                <ToolErrorAlert err={profileError} fallback="get_client_profile failed" severity="warning" />
               )}
 
               {clientProfile && !profileLoading && (

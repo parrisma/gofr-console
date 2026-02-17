@@ -22,6 +22,7 @@ import ClientProfileEditDialog from '../components/client/ClientProfileEditDialo
 import { PortfolioPanel } from '../components/common/PortfolioPanel';
 import { WatchlistPanel } from '../components/common/WatchlistPanel';
 import { ClientNewsPanel } from '../components/common/ClientNewsPanel';
+import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
@@ -289,10 +290,7 @@ export default function Client360View() {
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="error">
-          <AlertTitle>Error Loading Clients</AlertTitle>
-          {error}
-        </Alert>
+        <ToolErrorAlert err={error} fallback="Error loading clients" />
       </Box>
     );
   }
