@@ -381,7 +381,7 @@ export default function GofrDocRenderProxy() {
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
           <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="h6">Styles</Typography>
+            <Typography variant="h6">Choose styling</Typography>
             <RawResponsePopupIcon title="Raw list_styles response" data={stylesRes} />
           </Box>
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -391,7 +391,7 @@ export default function GofrDocRenderProxy() {
               disabled={stylesLoading}
               startIcon={stylesLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {stylesLoading ? 'Loading…' : 'List Styles'}
+              {stylesLoading ? 'Loading…' : 'Browse styles'}
             </Button>
             <RequestPreview tool="list_styles" args={{}} />
           </Box>
@@ -402,7 +402,7 @@ export default function GofrDocRenderProxy() {
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
           <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="h6">Render</Typography>
+            <Typography variant="h6">Generate output</Typography>
             <RawResponsePopupIcon title="Raw get_document response" data={renderRes} />
           </Box>
           <TextField
@@ -458,7 +458,7 @@ export default function GofrDocRenderProxy() {
               disabled={renderLoading}
               startIcon={renderLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {renderLoading ? 'Rendering…' : 'Render Document'}
+              {renderLoading ? 'Generating…' : 'Generate output'}
             </Button>
             <RequestPreview tool="get_document" args={{ session_id: sessionId, format, style_id: styleId, proxy }} />
           </Box>
@@ -469,7 +469,7 @@ export default function GofrDocRenderProxy() {
 
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
         <CardContent>
-          <Typography variant="h6">Proxy download test</Typography>
+          <Typography variant="h6">Download proxy output</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             When proxy=true, the server returns proxy_guid and download_url. Use proxy_guid here.
           </Typography>
@@ -487,7 +487,7 @@ export default function GofrDocRenderProxy() {
               disabled={proxyFetchLoading}
               startIcon={proxyFetchLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {proxyFetchLoading ? 'Fetching…' : 'Fetch Proxy Content'}
+              {proxyFetchLoading ? 'Downloading…' : 'Download proxy output'}
             </Button>
             <RequestPreview tool="proxy_download" args={{ proxy_guid: proxyGuid }} />
           </Box>

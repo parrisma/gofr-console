@@ -41,8 +41,8 @@ Last updated: 2026-02-17
 - Phase 5 (GOFR-DOC context strip): Done
 - Phase 6 (Dashboard task launcher): Done
 - Phase 7 (Consistent help affordance): Done
-- Phase 8 (Microcopy rewrite): In progress
-- Phase 9 (Inline examples for JSON fields): Not started
+- Phase 8 (Microcopy rewrite): Done
+- Phase 9 (Inline examples for JSON fields): In progress
 - Phase 10 (Table affordance consistency): Not started
 
 ---

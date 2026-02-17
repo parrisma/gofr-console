@@ -394,8 +394,8 @@ export default function GofrDig() {
         <Typography variant="body2" color="text.secondary">
           <strong>① Pick a token</strong> — this determines which access group the scraped material belongs to.
           <strong>② Set anti-detection</strong> — configure how requests appear to the target site.
-          <strong>③ Analyse structure</strong> — preview the page layout and find the right CSS selectors.
-          <strong>④ Extract content</strong> — pull the actual text, links, and metadata.
+          <strong>③ Preview structure</strong> — scan the page layout and find the right CSS selectors.
+          <strong>④ Extract content</strong> — pull the text, links, and metadata.
           <strong>⑤ Review sessions</strong> — browse chunked results from large scrapes.
           Each step builds on the previous one; start from the top and work down.
         </Typography>
@@ -446,7 +446,7 @@ export default function GofrDig() {
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Typography variant="h6">
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>②</Box>
-              Anti-Detection Settings
+              Anti-detection
             </Typography>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
               <RawResponsePopupIcon title="Raw set_antidetection response" data={antiResponse} />
@@ -523,7 +523,7 @@ export default function GofrDig() {
           )}
 
           <Button variant="contained" sx={{ mt: 2 }} onClick={handleApplyAntiDetection} disabled={antiLoading}>
-            Apply Settings
+            Apply anti-detection
           </Button>
         </CardContent>
       </Card>
@@ -534,7 +534,7 @@ export default function GofrDig() {
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Typography variant="h6">
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>③</Box>
-              Structure Discovery
+              Preview structure
             </Typography>
             <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
               <RawResponsePopupIcon title="Raw get_structure response" data={structureResponse} />
@@ -592,7 +592,7 @@ export default function GofrDig() {
           )}
 
           <Button variant="contained" sx={{ mt: 2 }} onClick={handleAnalyzeStructure} disabled={structureLoading}>
-            Analyze Structure
+            Preview structure
           </Button>
 
           {structureResponse?.language && (
@@ -608,7 +608,7 @@ export default function GofrDig() {
           <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
             <Typography variant="h6">
               <Box component="span" sx={{ color: 'primary.main', mr: 1 }}>④</Box>
-              Content Extraction
+              Extract content
             </Typography>
             {contentLoading && <CircularProgress size={20} />}
           </Box>
@@ -733,7 +733,7 @@ export default function GofrDig() {
 
           <Box display="flex" alignItems="center" gap={2} mt={2}>
             <Button variant="contained" onClick={handleFetchContent} disabled={contentLoading}>
-              Fetch Content
+              Extract content
             </Button>
             <Tooltip
               title={

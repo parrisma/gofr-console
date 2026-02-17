@@ -466,7 +466,7 @@ export default function GofrDocDiscovery() {
               disabled={templatesLoading}
               startIcon={templatesLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {templatesLoading ? 'Loading…' : 'List Templates'}
+              {templatesLoading ? 'Loading…' : 'Browse templates'}
             </Button>
             <RequestPreview tool="list_templates" args={{}} />
           </Box>
@@ -530,7 +530,7 @@ export default function GofrDocDiscovery() {
               disabled={templateDetailsLoading}
               startIcon={templateDetailsLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {templateDetailsLoading ? 'Loading…' : 'Get Template Details'}
+              {templateDetailsLoading ? 'Loading…' : 'View template details'}
             </Button>
             <RequestPreview tool="get_template_details" args={{ template_id: templateId }} />
           </Box>
@@ -551,7 +551,7 @@ export default function GofrDocDiscovery() {
               disabled={fragmentsLoading}
               startIcon={fragmentsLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {fragmentsLoading ? 'Loading…' : 'List Template Fragments'}
+              {fragmentsLoading ? 'Loading…' : 'Browse fragments'}
             </Button>
             <RequestPreview tool="list_template_fragments" args={{ template_id: templateId }} />
           </Box>
@@ -582,7 +582,7 @@ export default function GofrDocDiscovery() {
               disabled={fragmentDetailsLoading}
               startIcon={fragmentDetailsLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {fragmentDetailsLoading ? 'Loading…' : 'Get Fragment Details'}
+              {fragmentDetailsLoading ? 'Loading…' : 'View fragment details'}
             </Button>
             <RequestPreview tool="get_fragment_details" args={{ template_id: templateId, fragment_id: fragmentId }} />
           </Box>
@@ -606,7 +606,7 @@ export default function GofrDocDiscovery() {
               disabled={stylesLoading}
               startIcon={stylesLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {stylesLoading ? 'Loading…' : 'List Styles'}
+              {stylesLoading ? 'Loading…' : 'Browse styles'}
             </Button>
             <RequestPreview tool="list_styles" args={{}} />
           </Box>

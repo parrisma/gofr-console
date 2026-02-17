@@ -202,7 +202,7 @@ export default function GofrIQIngest() {
         <Typography variant="h4">Document Operations</Typography>
       </Box>
       <Typography variant="body2" color="text.secondary" gutterBottom>
-        Ingest documents or search the GOFR-IQ knowledge graph.
+        Upload research notes and client material, or search the GOFR-IQ knowledge graph.
       </Typography>
 
       {tokens.length === 0 && (
@@ -394,7 +394,7 @@ export default function GofrIQIngest() {
               disabled={submitting || !selectedToken || !title.trim() || !content.trim() || !selectedSourceGuid}
               startIcon={submitting ? <CircularProgress size={18} /> : undefined}
             >
-              {submitting ? 'Ingesting...' : 'Ingest Document'}
+              {submitting ? 'Uploading...' : 'Upload research note'}
             </Button>
             <Button variant="outlined" onClick={handleClear} disabled={submitting}>
               Clear

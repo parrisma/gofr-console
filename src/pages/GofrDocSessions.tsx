@@ -553,7 +553,7 @@ export default function GofrDocSessions() {
       <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1 }}>
         <CardContent>
           <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="h6">Create session</Typography>
+            <Typography variant="h6">Create document session</Typography>
             <RawResponsePopupIcon title="Raw create_document_session response" data={createRes} />
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -629,7 +629,7 @@ export default function GofrDocSessions() {
               disabled={createLoading || tokenMissing}
               startIcon={createLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {createLoading ? 'Creating…' : 'Create Document Session'}
+              {createLoading ? 'Creating…' : 'Create session'}
             </Button>
             <RequestPreview tool="create_document_session" args={{ template_id: templateId, alias }} />
           </Box>
@@ -655,7 +655,7 @@ export default function GofrDocSessions() {
               disabled={listLoading}
               startIcon={listLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {listLoading ? 'Loading…' : 'List Active Sessions'}
+              {listLoading ? 'Loading…' : 'View active sessions'}
             </Button>
             <RequestPreview tool="list_active_sessions" args={{}} />
           </Box>
@@ -702,7 +702,7 @@ export default function GofrDocSessions() {
               disabled={statusLoading}
               startIcon={statusLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {statusLoading ? 'Loading…' : 'Get Session Status'}
+              {statusLoading ? 'Loading…' : 'Check status'}
             </Button>
             <RequestPreview tool="get_session_status" args={{ session_id: statusSessionId }} />
           </Box>
