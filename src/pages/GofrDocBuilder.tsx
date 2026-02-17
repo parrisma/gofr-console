@@ -19,6 +19,7 @@ import type { JwtToken } from '../stores/configStore';
 import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
+import TokenSelect from '../components/common/TokenSelect';
 import type {
   DocAddFragmentResponse,
   DocAddImageFragmentResponse,
@@ -478,6 +479,16 @@ export default function GofrDocBuilder() {
           <Typography variant="h6" gutterBottom>
             Context
           </Typography>
+          <TokenSelect
+            label="Token"
+            tokens={tokens}
+            value={uiState.selectedTokenIndex}
+            onChange={(idx) => setUiState({ selectedTokenIndex: idx })}
+            allowNone={false}
+            noneLabel="Select token"
+            fullWidth
+            sx={{ mb: 2 }}
+          />
           <TextField
             label="template_id"
             value={templateId}

@@ -13,14 +13,10 @@ import {
   ListItemText,
   Paper,
   Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Chip,
   Button,
   Snackbar,
 } from '@mui/material';
+import TokenSelect from '../components/common/TokenSelect';
 import ClientHeader from '../components/common/ClientHeader';
 import ClientProfileEditDialog from '../components/client/ClientProfileEditDialog';
 import { PortfolioPanel } from '../components/common/PortfolioPanel';
@@ -349,28 +345,18 @@ export default function Client360View() {
       </Card>
       
       {/* Token Selection */}
-      <FormControl fullWidth size="small" sx={{ mb: 3, maxWidth: 400 }}>
-        <InputLabel>Token (Group)</InputLabel>
-        <Select
-          value={selectedTokenIndex >= 0 ? selectedTokenIndex : ''}
-          label="Token (Group)"
-          onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
-          disabled={tokens.length === 0}
-          inputRef={tokenSelectRef}
-        >
-          {tokens.length === 0 && (
-            <MenuItem disabled>No tokens available</MenuItem>
-          )}
-          {tokens.map((token: JwtToken, index: number) => (
-            <MenuItem key={index} value={index}>
-              <Box display="flex" alignItems="center" gap={1}>
-                <span>{token.name}</span>
-                <Chip label={token.groups} size="small" color="secondary" variant="outlined" />
-              </Box>
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+      <TokenSelect
+        label="Token (Group)"
+        tokens={tokens}
+        value={selectedTokenIndex}
+        onChange={setSelectedTokenIndex}
+        allowNone={false}
+        noneLabel={tokens.length === 0 ? 'No tokens available' : 'Select token'}
+        disabled={tokens.length === 0}
+        fullWidth
+        sx={{ mb: 3, maxWidth: 400 }}
+        inputRef={tokenSelectRef}
+      />
 
       <Box sx={{ display: 'flex', gap: 3, mt: 3 }}>
         {/* Left Sidebar: Client List */}

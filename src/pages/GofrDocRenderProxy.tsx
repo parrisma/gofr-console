@@ -20,6 +20,7 @@ import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import PdfPreview from '../components/common/PdfPreview';
+import TokenSelect from '../components/common/TokenSelect';
 import type { DocGetDocumentResponse, DocListStylesResponse, DocRenderFormat } from '../types/gofrDoc';
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -353,12 +354,21 @@ export default function GofrDocRenderProxy() {
           <Typography variant="h6" gutterBottom>
             Token (required)
           </Typography>
+          <TokenSelect
+            label="Token"
+            tokens={tokens}
+            value={uiState.selectedTokenIndex}
+            onChange={(idx) => setUiState({ selectedTokenIndex: idx })}
+            allowNone={false}
+            noneLabel="Select token"
+            fullWidth
+          />
           {tokenMissing ? (
-            <Alert severity="warning">
-              Auth required: select a token in Sessions.
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Auth required: select a token.
             </Alert>
           ) : (
-            <Alert severity="info">
+            <Alert severity="info" sx={{ mt: 2 }}>
               Using token: {selectedToken?.name}
             </Alert>
           )}

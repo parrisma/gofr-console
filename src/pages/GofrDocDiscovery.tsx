@@ -28,6 +28,7 @@ import type { JwtToken } from '../stores/configStore';
 import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
+import TokenSelect from '../components/common/TokenSelect';
 import type {
   DocFragmentDetailsResponse,
   DocListStylesResponse,
@@ -414,21 +415,13 @@ export default function GofrDocDiscovery() {
           <Typography variant="h6" gutterBottom>
             Optional token
           </Typography>
-          <TextField
-            select
+          <TokenSelect
             label="Token"
+            tokens={tokens}
             value={uiState.selectedTokenIndex}
-            onChange={(e) => setUiState({ selectedTokenIndex: Number(e.target.value) })}
-            sx={{ minWidth: 280 }}
-            SelectProps={{ native: true }}
-          >
-            <option value={-1}>No token</option>
-            {tokens.map((t: JwtToken, idx: number) => (
-              <option key={t.name} value={idx}>
-                {t.name}
-              </option>
-            ))}
-          </TextField>
+            onChange={(idx) => setUiState({ selectedTokenIndex: idx })}
+            allowNone
+          />
           {selectedToken ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               Using token: {selectedToken.name}

@@ -34,6 +34,7 @@ import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import { logger } from '../services/logging';
 import type { JwtToken } from '../stores/configStore';
+import TokenSelect from '../components/common/TokenSelect';
 import type {
   AntiDetectionResponse,
   ContentResponse,
@@ -410,25 +411,16 @@ export default function GofrDig() {
           </Typography>
 
           <Box display="flex" alignItems="flex-start" gap={1} sx={{ mb: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel id="dig-token-label">Token</InputLabel>
-              <Select
-                labelId="dig-token-label"
-                value={selectedTokenIndex}
-                label="Token"
-                onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
-                inputRef={tokenSelectRef}
-              >
-                <MenuItem value={-1}>
-                  <em>Select token</em>
-                </MenuItem>
-                {tokens.map((token, index) => (
-                  <MenuItem key={token.name} value={index}>
-                    {token.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TokenSelect
+              label="Token"
+              tokens={tokens}
+              value={selectedTokenIndex}
+              onChange={setSelectedTokenIndex}
+              allowNone={false}
+              noneLabel="Select token"
+              fullWidth
+              inputRef={tokenSelectRef}
+            />
             <Box sx={{ pt: 2 }}>
               <FieldTip tip="The token determines which access group the scraped content is stored under. Only users with access to that group can view, search, or use the material. Choose the token that matches the intended audience." />
             </Box>

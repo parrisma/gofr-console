@@ -30,6 +30,7 @@ import type {
 import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
+import TokenSelect from '../components/common/TokenSelect';
 
 const ALIAS_RE = /^[A-Za-z0-9_-]{3,64}$/;
 
@@ -530,21 +531,14 @@ export default function GofrDocSessions() {
           <Typography variant="h6" gutterBottom>
             Token (required)
           </Typography>
-          <TextField
-            select
+          <TokenSelect
             label="Token"
+            tokens={tokens}
             value={uiState.selectedTokenIndex}
-            onChange={(e) => setUiState({ selectedTokenIndex: Number(e.target.value) })}
-            sx={{ minWidth: 280 }}
-            SelectProps={{ native: true }}
-          >
-            <option value={-1}>Select token</option>
-            {tokens.map((t: JwtToken, idx: number) => (
-              <option key={t.name} value={idx}>
-                {t.name}
-              </option>
-            ))}
-          </TextField>
+            onChange={(idx) => setUiState({ selectedTokenIndex: idx })}
+            allowNone={false}
+            noneLabel="Select token"
+          />
           {tokenMissing && (
             <Alert severity="warning" sx={{ mt: 2 }}>
               Auth required: select a token to use sessions and builder tools.

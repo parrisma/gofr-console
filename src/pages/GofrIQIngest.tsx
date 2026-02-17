@@ -12,7 +12,6 @@ import {
   Select,
   MenuItem,
   Snackbar,
-  Chip,
   Tabs,
   Tab,
 } from '@mui/material';
@@ -21,6 +20,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
+import TokenSelect from '../components/common/TokenSelect';
 import type { Source, IngestResult } from '../types/gofrIQ';
 
 export default function GofrIQIngest() {
@@ -225,30 +225,21 @@ export default function GofrIQIngest() {
             <Box>
               {/* Ingest Tab Content */}
               {/* Token Selection */}
-              <FormControl fullWidth size="small" sx={{ mb: 3 }}>
-                <InputLabel>Token (Group)</InputLabel>
-                <Select
-                  value={selectedTokenIndex >= 0 ? selectedTokenIndex : ''}
+              <Box sx={{ mb: 3 }}>
+                <TokenSelect
                   label="Token (Group)"
-                  onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
+                  tokens={tokens}
+                  value={selectedTokenIndex}
+                  onChange={setSelectedTokenIndex}
+                  allowNone={false}
+                  noneLabel={tokens.length === 0 ? 'No tokens available' : 'Select token'}
                   disabled={tokens.length === 0}
-                >
-                  {tokens.length === 0 && (
-                    <MenuItem disabled>No tokens available</MenuItem>
-                  )}
-                  {tokens.map((token: JwtToken, index: number) => (
-                    <MenuItem key={index} value={index}>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <span>{token.name}</span>
-                        <Chip label={token.groups} size="small" color="secondary" variant="outlined" />
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                  fullWidth
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                   Documents will be uploaded to the group associated with this token
                 </Typography>
-              </FormControl>
+              </Box>
 
           {/* Source Selection */}
           <FormControl fullWidth size="small" sx={{ mb: 3 }}>
@@ -416,27 +407,18 @@ export default function GofrIQIngest() {
               </Typography>
 
               {/* Token Selection for Query */}
-              <FormControl fullWidth size="small" sx={{ mb: 3, mt: 2 }}>
-                <InputLabel>Token (Group)</InputLabel>
-                <Select
-                  value={selectedTokenIndex >= 0 ? selectedTokenIndex : ''}
+              <Box sx={{ mb: 3, mt: 2 }}>
+                <TokenSelect
                   label="Token (Group)"
-                  onChange={(e) => setSelectedTokenIndex(Number(e.target.value))}
+                  tokens={tokens}
+                  value={selectedTokenIndex}
+                  onChange={setSelectedTokenIndex}
+                  allowNone={false}
+                  noneLabel={tokens.length === 0 ? 'No tokens available' : 'Select token'}
                   disabled={tokens.length === 0}
-                >
-                  {tokens.length === 0 && (
-                    <MenuItem disabled>No tokens available</MenuItem>
-                  )}
-                  {tokens.map((token: JwtToken, index: number) => (
-                    <MenuItem key={index} value={index}>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <span>{token.name}</span>
-                        <Chip label={token.groups} size="small" color="secondary" variant="outlined" />
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                  fullWidth
+                />
+              </Box>
 
               {/* Search Field */}
               <TextField
