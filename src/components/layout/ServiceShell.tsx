@@ -3,6 +3,8 @@ import { Box, AppBar, Toolbar, Typography, Drawer, IconButton, Breadcrumbs, Link
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowBack, MonitorHeart, Storage, FileUpload, People, Dashboard } from '@mui/icons-material';
 
+import HelpPopupIcon from '../common/HelpPopupIcon';
+
 const drawerWidth = 60;
 
 interface ServiceShellNavItem {
@@ -21,6 +23,47 @@ interface ServiceShellProps {
 export default function ServiceShell({ children, serviceName, serviceRoute, navItems }: ServiceShellProps) {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const helpText = (() => {
+    if (serviceName === 'GOFR-IQ') {
+      return [
+        'GOFR-IQ quick start',
+        '',
+        '1) Select a token (controls the client group you can access)',
+        '2) Open Client 360 and pick a client',
+        '3) Review portfolio + watchlist + news',
+        '4) Update mandate / restrictions as needed',
+        '',
+        'Tip: If you see empty lists, double-check you selected the intended token/group in Operations.',
+      ];
+    }
+    if (serviceName === 'GOFR-DIG') {
+      return [
+        'GOFR-DIG quick start',
+        '',
+        '1) Select a token (this defines the storage/access group)',
+        '2) Paste the URL you want to scrape',
+        '3) Apply anti-detection settings',
+        '4) Analyse structure (optional selectors)',
+        '5) Fetch content (session mode for large scrapes)',
+        '',
+        'Tip: Use Sessions to browse chunked results and re-use URLs in automation.',
+      ];
+    }
+    if (serviceName === 'GOFR-DOC') {
+      return [
+        'GOFR-DOC quick start',
+        '',
+        '1) Discovery: pick template_id (and optional style_id)',
+        '2) Sessions: create a session (save session_id)',
+        '3) Builder: set global parameters, then add fragments',
+        '4) Render: generate HTML/PDF/Markdown (proxy for large outputs)',
+        '',
+        'Tip: Sessions/Builder/Render require a token. Discovery tools do not.',
+      ];
+    }
+    return ['Help is not available for this service yet.'];
+  })();
 
   const defaultNavItems: ServiceShellNavItem[] = [
     { path: `${serviceRoute}/health`, icon: <MonitorHeart />, label: 'Health' },
@@ -65,6 +108,9 @@ export default function ServiceShell({ children, serviceName, serviceRoute, navI
             </Link>
             <Typography color="inherit">{serviceName}</Typography>
           </Breadcrumbs>
+          <Box sx={{ ml: 1 }}>
+            <HelpPopupIcon title={`${serviceName} help`} body={helpText} />
+          </Box>
         </Toolbar>
       </AppBar>
       
