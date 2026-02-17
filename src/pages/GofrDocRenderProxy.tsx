@@ -6,10 +6,20 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  Divider,
+  FormControlLabel,
+  IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Switch,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
@@ -19,7 +29,6 @@ import type { JwtToken } from '../stores/configStore';
 import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
-import PdfPreview from '../components/common/PdfPreview';
 import TokenSelect from '../components/common/TokenSelect';
 import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
 import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
@@ -77,8 +86,6 @@ export default function GofrDocRenderProxy() {
   const [proxyGuid, setProxyGuid] = useState('');
   const [proxyFetchLoading, setProxyFetchLoading] = useState(false);
   const [proxyFetchErr, setProxyFetchErr] = useState<unknown>(null);
-  const [proxyFetchMeta, setProxyFetchMeta] = useState<{ status: number; contentType: string; size: number } | null>(null);
-  const [proxyFetchBodyPreview, setProxyFetchBodyPreview] = useState<string>('');
 
   useEffect(() => {
     logger.info({
@@ -194,9 +201,62 @@ export default function GofrDocRenderProxy() {
     if (!renderRes) return null;
     if (proxy) {
       return (
-        <Alert severity="info" sx={{ mt: 2 }}>
-          Proxy mode enabled. Use proxy_guid for downloads.
-        </Alert>
+        <Box sx={{ mt: 2 }}>
+          <Alert severity="info">
+            Render by proxy enabled. The document is not returned inline; download it using proxy_guid.
+          </Alert>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+            <TextField
+              label="proxy_guid"
+              value={proxyGuid}
+              fullWidth
+              InputProps={{ readOnly: true }}
+              sx={{ minWidth: 320, flex: 1 }}
+            />
+            <Tooltip
+              placement="right"
+              title={
+                <Box sx={{ maxWidth: 560 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Download URL
+                  </Typography>
+                  <Box
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      p: 1,
+                      fontSize: 12,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {proxyGuid.trim() ? `/api/gofr-doc/proxy/${encodeURIComponent(proxyGuid.trim())}` : '(proxy_guid not set)'}
+                  </Box>
+                </Box>
+              }
+            >
+              <IconButton size="small" aria-label="Download URL">
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            <Button
+              variant="outlined"
+              onClick={fetchProxy}
+              disabled={proxyFetchLoading || !proxyGuid.trim()}
+              startIcon={proxyFetchLoading ? <CircularProgress size={16} /> : undefined}
+            >
+              {proxyFetchLoading ? 'Downloading…' : 'Download'}
+            </Button>
+          </Box>
+
+          {proxyFetchErr ? <ToolErrorAlert err={proxyFetchErr} fallback="proxy download failed" /> : null}
+        </Box>
       );
     }
 
@@ -233,20 +293,18 @@ export default function GofrDocRenderProxy() {
     if (format === 'pdf') {
       return (
         <Box sx={{ mt: 2 }}>
-          {pdfBytes ? <PdfPreview pdfData={pdfBytes} /> : (
-            <Alert severity="warning" sx={{ mt: 1 }}>
-              PDF content was not valid base64 or could not be decoded. Raw response is still available below.
-            </Alert>
-          )}
+          <Alert severity="info">
+            PDF preview is download-only. Download the file and open it in your browser or a PDF reader.
+          </Alert>
           {pdfBytes ? (
-            <Button
-              sx={{ mt: 2 }}
-              variant="outlined"
-              onClick={() => downloadBlob(pdfBytes as Uint8Array, 'document.pdf', 'application/pdf')}
-            >
+            <Button sx={{ mt: 2 }} variant="outlined" onClick={() => downloadBlob(pdfBytes, 'document.pdf', 'application/pdf')}>
               Download PDF
             </Button>
-          ) : null}
+          ) : (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              PDF content was not valid base64 or could not be decoded. Raw response is still available via the raw response popup.
+            </Alert>
+          )}
         </Box>
       );
     }
@@ -266,8 +324,6 @@ export default function GofrDocRenderProxy() {
     const startedAt = performance.now();
     setProxyFetchLoading(true);
     setProxyFetchErr(null);
-    setProxyFetchMeta(null);
-    setProxyFetchBodyPreview('');
 
     try {
       // Best-effort: support either /proxy/<guid> or /proxy?proxy_guid=<guid> depending on server.
@@ -300,15 +356,6 @@ export default function GofrDocRenderProxy() {
 
       const contentType = response.headers.get('content-type') || 'unknown';
       const buf = new Uint8Array(await response.arrayBuffer());
-      setProxyFetchMeta({ status: response.status, contentType, size: buf.byteLength });
-
-      const previewBytes = buf.slice(0, Math.min(buf.byteLength, 4096));
-      try {
-        const text = new TextDecoder('utf-8', { fatal: false }).decode(previewBytes);
-        setProxyFetchBodyPreview(text);
-      } catch {
-        setProxyFetchBodyPreview('');
-      }
 
       logger.info({
         event: 'ui_form_submitted',
@@ -396,6 +443,54 @@ export default function GofrDocRenderProxy() {
             <RequestPreview tool="list_styles" args={{}} />
           </Box>
           {stylesErr ? <ToolErrorAlert err={stylesErr} fallback="list_styles failed" /> : null}
+
+          {stylesRes?.styles?.length ? (
+            <Box sx={{ mt: 2 }}>
+              <Table size="small" sx={{ mb: 1 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>style_id</TableCell>
+                    <TableCell>name</TableCell>
+                    <TableCell>description</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {stylesRes.styles.map((s) => (
+                    <TableRow
+                      key={s.style_id}
+                      hover
+                      selected={s.style_id === styleId}
+                      role="button"
+                      tabIndex={0}
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setStyleId(s.style_id);
+                        setUiState({ styleId: s.style_id });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setStyleId(s.style_id);
+                          setUiState({ styleId: s.style_id });
+                        }
+                      }}
+                    >
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{s.style_id}</TableCell>
+                      <TableCell>{s.name ?? ''}</TableCell>
+                      <TableCell>{s.description ?? ''}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Typography variant="caption" color="text.secondary">
+                Click a row to set style_id for rendering.
+              </Typography>
+            </Box>
+          ) : stylesRes ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No styles found.
+            </Alert>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -421,7 +516,7 @@ export default function GofrDocRenderProxy() {
               select
               label="format"
               value={format}
-              onChange={(e) => setFormat(e.target.value as DocRenderFormat)}
+              onChange={(e) => { setFormat(e.target.value as DocRenderFormat); setRenderRes(null); }}
               sx={{ minWidth: 200 }}
               SelectProps={{ native: true }}
             >
@@ -430,6 +525,7 @@ export default function GofrDocRenderProxy() {
               <option value="pdf">pdf</option>
             </TextField>
             <TextField
+              select
               label="style_id (optional)"
               value={styleId}
               onChange={(e) => {
@@ -438,18 +534,32 @@ export default function GofrDocRenderProxy() {
                 setUiState({ styleId: v });
               }}
               sx={{ minWidth: 260 }}
-            />
-            <TextField
-              select
-              label="proxy"
-              value={proxy ? 'true' : 'false'}
-              onChange={(e) => setProxy(e.target.value === 'true')}
-              sx={{ minWidth: 160 }}
               SelectProps={{ native: true }}
+              helperText={!stylesRes ? 'Press Browse styles first' : undefined}
             >
-              <option value="false">false</option>
-              <option value="true">true</option>
+              <option value="">(none)</option>
+              {(stylesRes?.styles ?? []).map((s) => (
+                <option key={s.style_id} value={s.style_id}>
+                  {s.name ? `${s.style_id} — ${s.name}` : s.style_id}
+                </option>
+              ))}
             </TextField>
+            <FormControlLabel
+              sx={{ m: 0 }}
+              control={
+                <Switch
+                  checked={proxy}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setProxy(next);
+                    setRenderRes(null);
+                    setProxyGuid('');
+                    setProxyFetchErr(null);
+                  }}
+                />
+              }
+              label="render by proxy"
+            />
           </Box>
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
@@ -464,47 +574,6 @@ export default function GofrDocRenderProxy() {
           </Box>
           {renderErr ? <ToolErrorAlert err={renderErr} fallback="get_document failed" /> : null}
           {renderPreview()}
-        </CardContent>
-      </Card>
-
-      <Card sx={{ mb: 3, opacity: tokenMissing ? 0.5 : 1, pointerEvents: tokenMissing ? 'none' : 'auto' }}>
-        <CardContent>
-          <Typography variant="h6">Download proxy output</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            When proxy=true, the server returns proxy_guid and download_url. Use proxy_guid here.
-          </Typography>
-          <TextField
-            label="proxy_guid"
-            value={proxyGuid}
-            onChange={(e) => setProxyGuid(e.target.value)}
-            fullWidth
-            sx={{ mt: 2 }}
-          />
-          <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button
-              variant="contained"
-              onClick={fetchProxy}
-              disabled={proxyFetchLoading}
-              startIcon={proxyFetchLoading ? <CircularProgress size={16} /> : undefined}
-            >
-              {proxyFetchLoading ? 'Downloading…' : 'Download proxy output'}
-            </Button>
-            <RequestPreview tool="proxy_download" args={{ proxy_guid: proxyGuid }} />
-          </Box>
-          {proxyFetchErr ? <ToolErrorAlert err={proxyFetchErr} fallback="proxy download failed" /> : null}
-
-          {proxyFetchMeta ? (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2">Status: {proxyFetchMeta.status}</Typography>
-              <Typography variant="body2">Content-Type: {proxyFetchMeta.contentType}</Typography>
-              <Typography variant="body2">Size: {proxyFetchMeta.size} bytes</Typography>
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle2" gutterBottom>
-                Body preview (first 4KB)
-              </Typography>
-              <RawResponsePopupIcon title="Raw proxy body preview" data={proxyFetchBodyPreview || null} maxHeight={240} />
-            </Box>
-          ) : null}
         </CardContent>
       </Card>
 

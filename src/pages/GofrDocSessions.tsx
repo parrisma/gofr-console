@@ -9,6 +9,11 @@ import {
   CircularProgress,
   Divider,
   IconButton,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Tooltip,
   Typography,
@@ -570,9 +575,10 @@ export default function GofrDocSessions() {
               fullWidth
               sx={{ mb: 2 }}
               SelectProps={{ native: true }}
+              InputLabelProps={{ shrink: true }}
               helperText={templatesLoading ? 'Loading templates…' : 'Select a template'}
             >
-              <option value="">Select template</option>
+              <option value="" />
               {templatesRes.templates.map((t) => (
                 <option key={t.template_id} value={t.template_id}>
                   {t.template_id}{t.name ? ` — ${t.name}` : ''}
@@ -662,28 +668,52 @@ export default function GofrDocSessions() {
           {listErr ? <ToolErrorAlert err={listErr} fallback="list_active_sessions failed" /> : null}
           {listRes?.sessions?.length ? (
             <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Sessions
+              <Table size="small" sx={{ mb: 1 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>alias</TableCell>
+                    <TableCell>session_id</TableCell>
+                    <TableCell>template_id</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {listRes.sessions.map((s) => (
+                    <TableRow
+                      key={s.session_id}
+                      hover
+                      selected={s.session_id === uiState.sessionId}
+                      role="button"
+                      tabIndex={0}
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setUiState({ sessionId: s.session_id, templateId: s.template_id ?? uiState.templateId });
+                        setStatusSessionId(s.session_id);
+                        setAbortSessionId(s.session_id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setUiState({ sessionId: s.session_id, templateId: s.template_id ?? uiState.templateId });
+                          setStatusSessionId(s.session_id);
+                          setAbortSessionId(s.session_id);
+                        }
+                      }}
+                    >
+                      <TableCell>{s.alias ?? ''}</TableCell>
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{s.session_id}</TableCell>
+                      <TableCell>{s.template_id ?? ''}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Typography variant="caption" color="text.secondary">
+                Click a row to select a session.
               </Typography>
-              {listRes.sessions.map((s) => (
-                <Box key={s.session_id} display="flex" alignItems="center" justifyContent="space-between" sx={{ py: 0.5 }}>
-                  <Typography variant="body2" sx={{ mr: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {s.alias || s.session_id} ({s.template_id || 'template?'})
-                  </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setUiState({ sessionId: s.session_id, templateId: s.template_id ?? uiState.templateId });
-                      setStatusSessionId(s.session_id);
-                      setAbortSessionId(s.session_id);
-                    }}
-                  >
-                    Use
-                  </Button>
-                </Box>
-              ))}
             </Box>
+          ) : listRes ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No active sessions found.
+            </Alert>
           ) : null}
         </CardContent>
       </Card>

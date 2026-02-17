@@ -145,6 +145,7 @@ export default function GofrDocDiscovery() {
   const [templateDetailsLoading, setTemplateDetailsLoading] = useState(false);
   const [templateDetailsErr, setTemplateDetailsErr] = useState<unknown>(null);
   const [templateDetails, setTemplateDetails] = useState<DocTemplateDetailsResponse | null>(null);
+  const [templateDetailsForId, setTemplateDetailsForId] = useState<string>('');
 
   const [fragmentsLoading, setFragmentsLoading] = useState(false);
   const [fragmentsErr, setFragmentsErr] = useState<unknown>(null);
@@ -154,6 +155,7 @@ export default function GofrDocDiscovery() {
   const [fragmentDetailsLoading, setFragmentDetailsLoading] = useState(false);
   const [fragmentDetailsErr, setFragmentDetailsErr] = useState<unknown>(null);
   const [fragmentDetails, setFragmentDetails] = useState<DocFragmentDetailsResponse | null>(null);
+  const [fragmentDetailsForKey, setFragmentDetailsForKey] = useState<string>('');
 
   const [stylesLoading, setStylesLoading] = useState(false);
   const [stylesErr, setStylesErr] = useState<unknown>(null);
@@ -254,9 +256,11 @@ export default function GofrDocDiscovery() {
     setTemplateDetailsLoading(true);
     setTemplateDetailsErr(null);
     setTemplateDetails(null);
+    setTemplateDetailsForId('');
     try {
       const res = await api.docGetTemplateDetails(id, selectedToken?.token);
       setTemplateDetails(res);
+      setTemplateDetailsForId(id);
       setUiState({ templateId: id });
       logger.info({
         event: 'ui_form_submitted',
@@ -337,14 +341,17 @@ export default function GofrDocDiscovery() {
       setFragmentDetailsErr(new Error('fragment_id is required'));
       return;
     }
+    const key = `${tId}::${fId}`;
     const requestId = logger.createRequestId();
     const startedAt = performance.now();
     setFragmentDetailsLoading(true);
     setFragmentDetailsErr(null);
     setFragmentDetails(null);
+    setFragmentDetailsForKey('');
     try {
       const res = await api.docGetFragmentDetails(tId, fId, selectedToken?.token);
       setFragmentDetails(res);
+      setFragmentDetailsForKey(key);
       logger.info({
         event: 'ui_form_submitted',
         message: 'get_fragment_details succeeded',
@@ -540,11 +547,23 @@ export default function GofrDocDiscovery() {
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
               variant="outlined"
-              onClick={loadTemplateDetails}
+              onClick={() => {
+                const id = templateId.trim();
+                const visible = Boolean(templateDetails) && templateDetailsForId === id;
+                if (visible) {
+                  setTemplateDetails(null);
+                  setTemplateDetailsErr(null);
+                  setTemplateDetailsForId('');
+                  return;
+                }
+                void loadTemplateDetails();
+              }}
               disabled={templateDetailsLoading}
               startIcon={templateDetailsLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {templateDetailsLoading ? 'Loading…' : 'View template details'}
+              {templateDetailsLoading
+                ? 'Loading…'
+                : (templateDetails && templateDetailsForId === templateId.trim() ? 'Hide template details' : 'View template details')}
             </Button>
             <RequestPreview tool="get_template_details" args={{ template_id: templateId }} />
           </Box>
@@ -557,7 +576,10 @@ export default function GofrDocDiscovery() {
 
       <Card>
         <CardContent>
-          <Typography variant="h6">Fragments</Typography>
+          <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="h6">Fragments</Typography>
+            <RawResponsePreview title="Raw list_template_fragments response" data={fragments} />
+          </Box>
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
               variant="contained"
@@ -570,33 +592,80 @@ export default function GofrDocDiscovery() {
             <RequestPreview tool="list_template_fragments" args={{ template_id: templateId }} />
           </Box>
           {fragmentsErr ? <ToolErrorAlert err={fragmentsErr} fallback="list_template_fragments failed" /> : null}
-          <JsonBlock data={fragments} copyLabel="Copy fragments" />
 
-          <Divider sx={{ my: 2 }} />
+          {fragments?.fragments?.length ? (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Fragments
+              </Typography>
+              <Table size="small" sx={{ mb: 1 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>fragment_id</TableCell>
+                    <TableCell>name</TableCell>
+                    <TableCell>description</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {fragments.fragments.map((f) => (
+                    <TableRow
+                      key={f.fragment_id}
+                      hover
+                      selected={f.fragment_id === fragmentId}
+                      role="button"
+                      tabIndex={0}
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setFragmentId(f.fragment_id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setFragmentId(f.fragment_id);
+                        }
+                      }}
+                    >
+                      <TableCell sx={{ whiteSpace: 'nowrap' }}>{f.fragment_id}</TableCell>
+                      <TableCell>{f.name ?? ''}</TableCell>
+                      <TableCell>{f.description ?? ''}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Typography variant="caption" color="text.secondary">
+                Click a row to select fragment_id for detail view.
+              </Typography>
+            </Box>
+          ) : fragments ? (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              No fragments found.
+            </Alert>
+          ) : null}
 
-          <TextField
-            select
-            label="fragment_id"
-            value={fragmentId}
-            onChange={(e) => setFragmentId(e.target.value)}
-            fullWidth
-            SelectProps={{ native: true }}
-          >
-            <option value="">Select fragment</option>
-            {(fragments?.fragments ?? []).map((f) => (
-              <option key={f.fragment_id} value={f.fragment_id}>
-                {f.fragment_id}
-              </option>
-            ))}
-          </TextField>
           <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
             <Button
               variant="outlined"
-              onClick={loadFragmentDetails}
-              disabled={fragmentDetailsLoading}
+              onClick={() => {
+                const tId = templateId.trim();
+                const fId = fragmentId.trim();
+                const key = `${tId}::${fId}`;
+                const visible = Boolean(fragmentDetails) && fragmentDetailsForKey === key;
+                if (visible) {
+                  setFragmentDetails(null);
+                  setFragmentDetailsErr(null);
+                  setFragmentDetailsForKey('');
+                  return;
+                }
+                void loadFragmentDetails();
+              }}
+              disabled={fragmentDetailsLoading || !fragmentId}
               startIcon={fragmentDetailsLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {fragmentDetailsLoading ? 'Loading…' : 'View fragment details'}
+              {fragmentDetailsLoading
+                ? 'Loading…'
+                : (fragmentDetails && fragmentDetailsForKey === `${templateId.trim()}::${fragmentId.trim()}`
+                    ? 'Hide fragment details'
+                    : 'View fragment details')}
             </Button>
             <RequestPreview tool="get_fragment_details" args={{ template_id: templateId, fragment_id: fragmentId }} />
           </Box>

@@ -3,9 +3,11 @@ import { Alert, Box, CircularProgress, Typography } from '@mui/material';
 
 // pdfjs-dist types are included in the package.
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
+import pdfjsWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-// Ensure the worker is bundled by Vite and loaded from the app origin (no external network fetch).
-GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+// Use Vite's ?url import so the worker resolves as a relative asset path,
+// working correctly regardless of host/port (dev container, prod nginx, etc.).
+GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
 export default function PdfPreview({
   pdfData,

@@ -337,64 +337,112 @@ class McpClient {
 
   /** Internal initialization — callers must go through initialize() for mutex */
   private async doInitialize(): Promise<void> {
-    const request: JsonRpcRequest = {
-      jsonrpc: '2.0',
-      id: this.nextId(),
-      method: 'initialize',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: {
-          name: 'gofr-console',
-          version: '0.0.1',
+    const INIT_TIMEOUT_MS = 10_000;
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(`${this.serviceName} initialize timed out after ${INIT_TIMEOUT_MS / 1000}s`),
+      INIT_TIMEOUT_MS,
+    );
+
+    try {
+      const request: JsonRpcRequest = {
+        jsonrpc: '2.0',
+        id: this.nextId(),
+        method: 'initialize',
+        params: {
+          protocolVersion: '2024-11-05',
+          capabilities: {},
+          clientInfo: {
+            name: 'gofr-console',
+            version: '0.0.1',
+          },
         },
-      },
-    };
+      };
 
-    const response = await fetch(`${this.baseUrl}/mcp/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream',
-        ...(this.sessionId && { 'Mcp-Session-Id': this.sessionId }),
-      },
-      body: JSON.stringify(request),
-    });
+      const response = await fetch(`${this.baseUrl}/mcp/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+          ...(this.sessionId && { 'Mcp-Session-Id': this.sessionId }),
+        },
+        body: JSON.stringify(request),
+        signal: controller.signal,
+      });
 
-    // Extract session ID from response header
-    const newSessionId = response.headers.get('mcp-session-id');
-    if (newSessionId) {
-      this.sessionId = newSessionId;
+      // Extract session ID from response header
+      const newSessionId = response.headers.get('mcp-session-id');
+      if (newSessionId) {
+        this.sessionId = newSessionId;
+      }
+
+      if (!response.ok) {
+        throw new Error(`MCP init failed: HTTP ${response.status}`);
+      }
+
+      const result = await parseSseResponse(response);
+      if (result.error) {
+        throw new Error(`MCP init error: ${result.error.message}`);
+      }
+
+      // Send initialized notification
+      await this.notify('notifications/initialized', {});
+    } catch (err) {
+      const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+      const message = isTimeout
+        ? `Service ${this.serviceName} is unreachable (initialize timed out after ${INIT_TIMEOUT_MS / 1000}s)`
+        : err instanceof Error ? err.message : 'MCP initialize failed';
+      logger.error({
+        event: isTimeout ? 'mcp_init_timeout' : 'mcp_init_failed',
+        message,
+        component: 'api',
+        service_name: this.serviceName,
+        dependency: `${this.serviceName}-mcp`,
+        result: isTimeout ? 'timeout' : 'failure',
+      });
+      throw new ApiError({
+        service: this.serviceName,
+        tool: 'initialize',
+        message,
+        recovery: `Verify the ${this.serviceName} service container is running and reachable.`,
+        cause: err,
+      });
+    } finally {
+      clearTimeout(timer);
     }
-
-    if (!response.ok) {
-      throw new Error(`MCP init failed: HTTP ${response.status}`);
-    }
-
-    const result = await parseSseResponse(response);
-    if (result.error) {
-      throw new Error(`MCP init error: ${result.error.message}`);
-    }
-
-    // Send initialized notification
-    await this.notify('notifications/initialized', {});
   }
 
   // Send notification (no response expected)
   private async notify(method: string, params: Record<string, unknown>): Promise<void> {
-    await fetch(`${this.baseUrl}/mcp/`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json, text/event-stream',
-        ...(this.sessionId && { 'Mcp-Session-Id': this.sessionId }),
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method,
-        params,
-      }),
-    });
+    const NOTIFY_TIMEOUT_MS = 5_000;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), NOTIFY_TIMEOUT_MS);
+    try {
+      await fetch(`${this.baseUrl}/mcp/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json, text/event-stream',
+          ...(this.sessionId && { 'Mcp-Session-Id': this.sessionId }),
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method,
+          params,
+        }),
+        signal: controller.signal,
+      });
+    } catch {
+      // Notifications are fire-and-forget; log but do not throw
+      logger.warn({
+        event: 'mcp_notify_failed',
+        message: `MCP notification ${method} failed for ${this.serviceName}`,
+        component: 'api',
+        service_name: this.serviceName,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   // Reset session (call when environment changes)
@@ -674,23 +722,34 @@ interface HealthData {
 export const api = {
   // GOFR-IQ Health Check
   healthCheck: async () => {
-    const client = getMcpClient('gofr-iq');
-    const result = await client.callTool<HealthCheckResult>('health_check');
-    
-    // Parse the text content from MCP response
-    const textContent = result.content?.find(c => c.type === 'text')?.text;
-    
-    // Default response
+    // Default response returned when GOFR-IQ is unreachable
     const defaultResponse = {
       status: 'unknown',
-      message: 'Unable to parse response',
+      message: 'GOFR-IQ service is unavailable',
       services: {
-        neo4j: { status: 'unknown', message: 'Unknown' },
-        chromadb: { status: 'unknown', message: 'Unknown' },
-        llm: { status: 'unknown', message: 'Unknown' },
+        neo4j: { status: 'unknown', message: 'Service unreachable' },
+        chromadb: { status: 'unknown', message: 'Service unreachable' },
+        llm: { status: 'unknown', message: 'Service unreachable' },
       },
       timestamp: new Date().toISOString(),
     };
+
+    let result: HealthCheckResult;
+    try {
+      const client = getMcpClient('gofr-iq');
+      result = await client.callTool<HealthCheckResult>('health_check');
+    } catch (err) {
+      logger.warn({
+        event: 'health_check_unavailable',
+        message: `GOFR-IQ health check failed: ${err instanceof Error ? err.message : 'unknown error'}`,
+        component: 'api',
+        service_name: 'gofr-iq',
+      });
+      return defaultResponse;
+    }
+    
+    // Parse the text content from MCP response
+    const textContent = result.content?.find(c => c.type === 'text')?.text;
     
     if (!textContent) return defaultResponse;
 

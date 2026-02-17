@@ -19,7 +19,21 @@ export default function Dashboard() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
 
   useEffect(() => {
-    api.healthCheck().then(setHealth);
+    api.healthCheck()
+      .then(setHealth)
+      .catch(() => {
+        // Swallow — healthCheck already returns a default on failure,
+        // but guard against any unexpected rejection.
+        setHealth({
+          status: 'unknown',
+          services: {
+            neo4j: { status: 'unknown', message: 'Service unreachable' },
+            chromadb: { status: 'unknown', message: 'Service unreachable' },
+            llm: { status: 'unknown', message: 'Service unreachable' },
+          },
+          timestamp: new Date().toISOString(),
+        });
+      });
   }, []);
 
   const services = [
