@@ -21,6 +21,7 @@ import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import TokenSelect from '../components/common/TokenSelect';
 import GofrDocContextStrip from '../components/common/GofrDocContextStrip';
 import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
+import ExamplesPopupIcon from '../components/common/ExamplesPopupIcon';
 import type {
   DocAddFragmentResponse,
   DocAddImageFragmentResponse,
@@ -30,6 +31,62 @@ import type {
   DocSetGlobalParametersResponse,
   DocValidateParametersResponse,
 } from '../types/gofrDoc';
+
+const VALIDATE_PARAMETERS_EXAMPLES: Array<string> = [
+  JSON.stringify({}, null, 2),
+  JSON.stringify(
+    {
+      as_of: '2026-02-17',
+      client_name: 'Example Client',
+      analyst: 'Example Analyst',
+    },
+    null,
+    2,
+  ),
+];
+
+const GLOBAL_PARAMETERS_EXAMPLES: Array<string> = [
+  JSON.stringify(
+    {
+      document_title: 'Client review pack',
+      as_of: '2026-02-17',
+    },
+    null,
+    2,
+  ),
+  JSON.stringify(
+    {
+      client_name: 'Example Client',
+      meeting_purpose: 'Quarterly review',
+      risk_profile: 'Balanced',
+      notes: 'Replace fields based on your template.',
+    },
+    null,
+    2,
+  ),
+];
+
+const ADD_FRAGMENT_PARAMETERS_EXAMPLES: Array<string> = [
+  JSON.stringify(
+    {
+      text: 'Key points for the client meeting go here.',
+    },
+    null,
+    2,
+  ),
+  JSON.stringify(
+    {
+      title: 'Table example',
+      columns: ['Item', 'Value'],
+      rows: [
+        ['Revenue', '123'],
+        ['EBITDA', '45'],
+      ],
+    },
+    null,
+    2,
+  ),
+];
 
 function safeJsonParse(input: string): { ok: true; value: unknown } | { ok: false; error: string } {
   const trimmed = input.trim();
@@ -524,6 +581,10 @@ export default function GofrDocBuilder() {
         <CardContent>
           <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
             <Typography variant="h6">Validate parameters</Typography>
+            <ExamplesPopupIcon
+              title="Examples (shape varies by template/fragment)"
+              examples={VALIDATE_PARAMETERS_EXAMPLES}
+            />
             <RawResponsePopupIcon title="Raw validate_parameters response" data={validateRes} />
           </Box>
           <TextField
@@ -593,6 +654,10 @@ export default function GofrDocBuilder() {
         <CardContent>
           <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
             <Typography variant="h6">Global parameters</Typography>
+            <ExamplesPopupIcon
+              title="Examples (shape depends on your template)"
+              examples={GLOBAL_PARAMETERS_EXAMPLES}
+            />
             <RawResponsePopupIcon title="Raw set_global_parameters response" data={globalsRes} />
           </Box>
           <TextField
@@ -631,6 +696,10 @@ export default function GofrDocBuilder() {
         <CardContent>
           <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
             <Typography variant="h6">Add fragment</Typography>
+            <ExamplesPopupIcon
+              title="Examples (shape depends on the fragment)"
+              examples={ADD_FRAGMENT_PARAMETERS_EXAMPLES}
+            />
             <RawResponsePopupIcon title="Raw add_fragment response" data={addFragmentRes} />
           </Box>
           <TextField label="fragment_id" value={addFragmentId} onChange={(e) => setAddFragmentId(e.target.value)} fullWidth sx={{ mt: 2 }} />
