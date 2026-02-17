@@ -19,6 +19,8 @@ import {
   Typography,
 } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
@@ -172,6 +174,8 @@ export default function GofrDocSessions() {
   const [abortLoading, setAbortLoading] = useState(false);
   const [abortErr, setAbortErr] = useState<unknown>(null);
   const [abortRes, setAbortRes] = useState<unknown>(null);
+
+  const [armedAbortSessionId, setArmedAbortSessionId] = useState<string>('');
 
   useEffect(() => {
     logger.info({
@@ -490,6 +494,61 @@ export default function GofrDocSessions() {
     }
   };
 
+  const abortSessionFromRow = async (sessionIdToAbort: string) => {
+    const token = requireToken();
+    const sId = sessionIdToAbort.trim();
+    if (!sId) {
+      setAbortErr(new Error('session_id is required'));
+      return;
+    }
+
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
+    setAbortLoading(true);
+    setAbortErr(null);
+    setAbortRes(null);
+    setAbortSessionId(sId);
+    setAbortConfirm(sId);
+    try {
+      const res = await api.docAbortDocumentSession(token, sId);
+      setAbortRes(res);
+      setArmedAbortSessionId('');
+
+      // If the aborted session was selected, clear the local inputs.
+      if (statusSessionId.trim() === sId) setStatusSessionId('');
+      if (abortSessionId.trim() === sId) setAbortSessionId('');
+
+      // Refresh the active sessions list if it has been loaded.
+      if (listRes) {
+        await listSessions();
+      }
+
+      logger.info({
+        event: 'ui_form_submitted',
+        message: 'abort_document_session succeeded (row action)',
+        request_id: requestId,
+        component: 'GofrDocSessions',
+        operation: 'abort_document_session',
+        result: 'success',
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
+    } catch (e) {
+      setAbortErr(e);
+      logger.error({
+        event: 'ui_form_submitted',
+        message: 'abort_document_session failed (row action)',
+        request_id: requestId,
+        component: 'GofrDocSessions',
+        operation: 'abort_document_session',
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { cause: e instanceof Error ? e.message : 'unknown' },
+      });
+    } finally {
+      setAbortLoading(false);
+    }
+  };
+
   const tokenMissing = uiState.selectedTokenIndex < 0;
 
   return (
@@ -674,6 +733,7 @@ export default function GofrDocSessions() {
                     <TableCell>alias</TableCell>
                     <TableCell>session_id</TableCell>
                     <TableCell>template_id</TableCell>
+                    <TableCell align="right">actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -702,6 +762,32 @@ export default function GofrDocSessions() {
                       <TableCell>{s.alias ?? ''}</TableCell>
                       <TableCell sx={{ whiteSpace: 'nowrap' }}>{s.session_id}</TableCell>
                       <TableCell>{s.template_id ?? ''}</TableCell>
+                      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                        <Tooltip title={armedAbortSessionId === s.session_id ? 'Confirm abort session' : 'Abort session'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color={armedAbortSessionId === s.session_id ? 'error' : 'default'}
+                              disabled={abortLoading}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (armedAbortSessionId !== s.session_id) {
+                                  setArmedAbortSessionId(s.session_id);
+                                  return;
+                                }
+                                void abortSessionFromRow(s.session_id);
+                              }}
+                            >
+                              {armedAbortSessionId === s.session_id ? (
+                                <CheckCircleOutlineIcon fontSize="small" />
+                              ) : (
+                                <DeleteOutlineIcon fontSize="small" />
+                              )}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
