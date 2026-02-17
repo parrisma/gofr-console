@@ -7,6 +7,7 @@ import path from 'path';
 // Fallback: config/ (repo default if data/ doesn't exist yet)
 const DATA_CONFIG = path.resolve(__dirname, '../data/config/ui-config.json');
 const REPO_CONFIG = path.resolve(__dirname, '../config/ui-config.json');
+// eslint-disable-next-line security/detect-non-literal-fs-filename
 const CONFIG_FILE = fs.existsSync(DATA_CONFIG) ? DATA_CONFIG : REPO_CONFIG;
 
 export function uiConfigPlugin(): Plugin {

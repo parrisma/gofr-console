@@ -32,6 +32,15 @@ const mcpServices = [
 
 // Build proxy config for all MCP services
 const proxyConfig: Record<string, { target: string; changeOrigin: boolean; rewrite: (path: string) => string; followRedirects: boolean }> = {};
+
+// gofr-doc stock images are served by the web port/container, not the MCP port
+proxyConfig['/api/gofr-doc/images'] = {
+  target: `http://gofr-doc-web:8042`,
+  changeOrigin: true,
+  followRedirects: true,
+  rewrite: (path: string) => path.replace(/^\/api\/gofr-doc/, ''),
+};
+
 for (const { name, host, port } of mcpServices) {
   proxyConfig[`/api/${name}`] = {
     target: `http://${host}:${port}`,

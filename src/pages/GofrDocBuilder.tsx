@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
@@ -104,8 +105,29 @@ type JsonValidationResult = {
   errors?: string[];
 };
 
+type StockImagesListResponse = {
+  status?: string;
+  data?: {
+    images?: unknown;
+    count?: unknown;
+  };
+};
+
+function encodePathSegments(input: string): string {
+  const trimmed = input.replace(/^\/+/, '');
+  const parts = trimmed.split('/').filter(Boolean);
+  return parts.map((p) => encodeURIComponent(p)).join('/');
+}
+
+function isSafeRelativeImagePath(path: string): boolean {
+  if (!path) return false;
+  if (path.startsWith('/') || path.startsWith('\\')) return false;
+  if (path.includes('..') || path.includes('\\')) return false;
+  return true;
+}
+
 export default function GofrDocBuilder() {
-  const { tokens } = useConfig();
+  const { tokens, environment, mcpServices } = useConfig();
   const { state: uiState, setState: setUiState } = useGofrDocUi();
 
   const selectedToken: JwtToken | null = useMemo(() => {
@@ -413,6 +435,50 @@ export default function GofrDocBuilder() {
   const [imgLoading, setImgLoading] = useState(false);
   const [imgErr, setImgErr] = useState<unknown>(null);
   const [imgRes, setImgRes] = useState<DocAddImageFragmentResponse | null>(null);
+
+  // ── Stock images picker (gofr-doc GET /images) ──
+  const [stockImagesLoading, setStockImagesLoading] = useState(false);
+  const [stockImagesErr, setStockImagesErr] = useState<unknown>(null);
+  const [stockImages, setStockImages] = useState<string[]>([]);
+  const [stockUrlSource, setStockUrlSource] = useState<'internal' | 'proxy'>('internal');
+
+  const computeStockImageUrl = (relativePath: string): string => {
+    const encoded = encodePathSegments(relativePath);
+    if (stockUrlSource === 'proxy') {
+      return new URL(`/api/gofr-doc/images/${encoded}`, window.location.origin).toString();
+    }
+
+    const docService = mcpServices.find((s) => s.name === 'gofr-doc');
+    const host = (docService?.containerHostname ?? 'gofr-doc-mcp').replace(/-mcp$/, '-web');
+    const webPort = environment === 'prod' ? docService?.ports?.prod?.web : docService?.ports?.dev?.web;
+    const mcpPort = environment === 'prod' ? docService?.ports?.prod?.mcp : docService?.ports?.dev?.mcp;
+    const port = typeof webPort === 'number' ? webPort : (typeof mcpPort === 'number' ? mcpPort : 8040);
+    return `http://${host}:${port}/images/${encoded}`;
+  };
+
+  const loadStockImages = async (): Promise<void> => {
+    setStockImagesLoading(true);
+    setStockImagesErr(null);
+    try {
+      const res = await fetch('/api/gofr-doc/images', { method: 'GET' });
+      if (!res.ok) throw new Error(`stock images request failed (HTTP ${res.status})`);
+      const json = (await res.json()) as StockImagesListResponse;
+      const imagesUnknown = json?.data?.images;
+      const list = Array.isArray(imagesUnknown) ? imagesUnknown : [];
+      const paths: string[] = [];
+      for (const entry of list) {
+        if (typeof entry !== 'string') continue;
+        if (!isSafeRelativeImagePath(entry)) continue;
+        paths.push(entry);
+      }
+      setStockImages(paths);
+    } catch (e) {
+      setStockImagesErr(e);
+      setStockImages([]);
+    } finally {
+      setStockImagesLoading(false);
+    }
+  };
 
   const runAddImage = async () => {
     const token = requireToken();
@@ -876,9 +942,128 @@ export default function GofrDocBuilder() {
             <Box sx={{ mt: 2 }}>
               <RawResponsePopupIcon title="Raw add_image_fragment response" data={imgRes} />
               <TextField label="image_url" value={imgUrl} onChange={(e) => setImgUrl(e.target.value)} fullWidth sx={{ mt: 1 }} />
+              <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <TextField
+                  select
+                  label="URL source"
+                  value={stockUrlSource}
+                  onChange={(e) => setStockUrlSource(e.target.value as 'internal' | 'proxy')}
+                  size="small"
+                  sx={{ minWidth: 220 }}
+                  SelectProps={{ native: true }}
+                  InputLabelProps={{ shrink: true }}
+                >
+                  <option value="internal">Internal (container)</option>
+                  <option value="proxy">Console-proxied</option>
+                </TextField>
+                <Button
+                  variant="outlined"
+                  onClick={loadStockImages}
+                  disabled={stockImagesLoading}
+                  startIcon={stockImagesLoading ? <CircularProgress size={16} /> : undefined}
+                >
+                  {stockImagesLoading ? 'Loading…' : 'Browse stock images'}
+                </Button>
+                <Tooltip
+                  placement="right"
+                  title={
+                    <Box sx={{ maxWidth: 560 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Stock images endpoint
+                      </Typography>
+                      <Box
+                        component="pre"
+                        sx={{
+                          m: 0,
+                          p: 1,
+                          fontSize: 12,
+                          bgcolor: 'background.paper',
+                          borderRadius: 1,
+                          border: '1px solid',
+                          borderColor: 'divider',
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        GET /api/gofr-doc/images
+                        {'\n'}
+                        {new URL('/api/gofr-doc/images', window.location.origin).toString()}
+                      </Box>
+                    </Box>
+                  }
+                >
+                  <IconButton size="small" aria-label="Stock images URL">
+                    <InfoOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              {stockImagesErr ? <ToolErrorAlert err={stockImagesErr} fallback="stock images list failed" /> : null}
+
+              {stockImages.length ? (
+                <Box sx={{ mt: 2 }}>
+                  <Table size="small" sx={{ mb: 1 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>path</TableCell>
+                        <TableCell>url</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {stockImages.map((p) => {
+                        const url = computeStockImageUrl(p);
+                        const selected = imgUrl.trim() === url;
+                        return (
+                          <TableRow
+                            key={p}
+                            hover
+                            selected={selected}
+                            role="button"
+                            tabIndex={0}
+                            sx={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              setImgUrl(url);
+                              setImgErr(null);
+                              if (stockUrlSource === 'internal') setImgRequireHttps(false);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setImgUrl(url);
+                                setImgErr(null);
+                                if (stockUrlSource === 'internal') setImgRequireHttps(false);
+                              }
+                            }}
+                          >
+                            <TableCell sx={{ whiteSpace: 'nowrap' }}>{p}</TableCell>
+                            <TableCell sx={{ fontFamily: 'monospace' }}>{url}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                  <Typography variant="caption" color="text.secondary">
+                    Click a row to set image_url. Internal URLs auto-set require_https=false.
+                  </Typography>
+                </Box>
+              ) : null}
               <TextField label="title" value={imgTitle} onChange={(e) => setImgTitle(e.target.value)} fullWidth sx={{ mt: 2 }} />
               <TextField label="alt_text" value={imgAlt} onChange={(e) => setImgAlt(e.target.value)} fullWidth sx={{ mt: 2 }} />
-              <TextField label="alignment" value={imgAlignment} onChange={(e) => setImgAlignment(e.target.value)} fullWidth sx={{ mt: 2 }} />
+              <TextField
+                select
+                label="alignment"
+                value={imgAlignment}
+                onChange={(e) => setImgAlignment(e.target.value)}
+                fullWidth
+                sx={{ mt: 2 }}
+                SelectProps={{ native: true }}
+                InputLabelProps={{ shrink: true }}
+                helperText="Optional: left, center, or right"
+              >
+                <option value="" />
+                <option value="left">left</option>
+                <option value="center">center</option>
+                <option value="right">right</option>
+              </TextField>
               <TextField
                 select
                 label="require_https"
