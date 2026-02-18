@@ -39,6 +39,17 @@ import type {
   StructureOptions,
 } from '../../types/gofrDig';
 import type {
+  NpCurveFitResponse,
+  NpFinancialBondPriceResponse,
+  NpFinancialConvertRateResponse,
+  NpFinancialOptionPriceResponse,
+  NpFinancialPvResponse,
+  NpFinancialTechnicalIndicatorsResponse,
+  NpMathListOperationsResponse,
+  NpMathResult,
+  NpPingResponse,
+} from '../../types/gofrNp';
+import type {
   DocAddFragmentResponse,
   DocAddImageFragmentResponse,
   DocAbortSessionResponse,
@@ -303,6 +314,12 @@ function parseToolText<T>(
       cause: err,
     });
   }
+}
+
+function extractNpError(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const obj = data as Record<string, unknown>;
+  return typeof obj.error === 'string' ? obj.error : null;
 }
 
 // Test hook (intentionally not documented as public API)
@@ -798,6 +815,186 @@ export const api = {
     } catch {
       return defaultResponse;
     }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Generic MCP helpers
+  // ---------------------------------------------------------------------------
+
+  mcpPing: async (serviceName: string): Promise<boolean> => {
+    try {
+      const client = getMcpClient(serviceName);
+      const result = await client.callTool<HealthCheckResult>('ping', {});
+      // Consider it reachable if we got any text payload back.
+      getTextContent(result, serviceName, 'ping');
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // GOFR-NP (MCP, public)
+  // ---------------------------------------------------------------------------
+
+  npPing: async (): Promise<NpPingResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('ping', {});
+    const textContent = getTextContent(result, 'gofr-np', 'ping');
+    return parseToolText<NpPingResponse>('gofr-np', 'ping', textContent);
+  },
+
+  npMathListOperations: async (): Promise<NpMathListOperationsResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('math_list_operations', {});
+    const textContent = getTextContent(result, 'gofr-np', 'math_list_operations');
+    const data = parseToolText<NpMathListOperationsResponse>('gofr-np', 'math_list_operations', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'math_list_operations',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npMathCompute: async (args: Record<string, unknown>): Promise<NpMathResult> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('math_compute', args);
+    const textContent = getTextContent(result, 'gofr-np', 'math_compute');
+    const data = parseToolText<NpMathResult>('gofr-np', 'math_compute', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'math_compute',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npCurveFit: async (args: Record<string, unknown>): Promise<NpCurveFitResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('curve_fit', args);
+    const textContent = getTextContent(result, 'gofr-np', 'curve_fit');
+    const data = parseToolText<NpCurveFitResponse>('gofr-np', 'curve_fit', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'curve_fit',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npCurvePredict: async (args: Record<string, unknown>): Promise<NpMathResult> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('curve_predict', args);
+    const textContent = getTextContent(result, 'gofr-np', 'curve_predict');
+    const data = parseToolText<NpMathResult>('gofr-np', 'curve_predict', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'curve_predict',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npFinancialPv: async (args: Record<string, unknown>): Promise<NpFinancialPvResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('financial_pv', args);
+    const textContent = getTextContent(result, 'gofr-np', 'financial_pv');
+    const data = parseToolText<NpFinancialPvResponse>('gofr-np', 'financial_pv', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'financial_pv',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npFinancialConvertRate: async (args: Record<string, unknown>): Promise<NpFinancialConvertRateResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('financial_convert_rate', args);
+    const textContent = getTextContent(result, 'gofr-np', 'financial_convert_rate');
+    const data = parseToolText<NpFinancialConvertRateResponse>('gofr-np', 'financial_convert_rate', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'financial_convert_rate',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npFinancialOptionPrice: async (args: Record<string, unknown>): Promise<NpFinancialOptionPriceResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('financial_option_price', args);
+    const textContent = getTextContent(result, 'gofr-np', 'financial_option_price');
+    const data = parseToolText<NpFinancialOptionPriceResponse>('gofr-np', 'financial_option_price', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'financial_option_price',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npFinancialBondPrice: async (args: Record<string, unknown>): Promise<NpFinancialBondPriceResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('financial_bond_price', args);
+    const textContent = getTextContent(result, 'gofr-np', 'financial_bond_price');
+    const data = parseToolText<NpFinancialBondPriceResponse>('gofr-np', 'financial_bond_price', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'financial_bond_price',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
+  },
+
+  npFinancialTechnicalIndicators: async (args: Record<string, unknown>): Promise<NpFinancialTechnicalIndicatorsResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('financial_technical_indicators', args);
+    const textContent = getTextContent(result, 'gofr-np', 'financial_technical_indicators');
+    const data = parseToolText<NpFinancialTechnicalIndicatorsResponse>('gofr-np', 'financial_technical_indicators', textContent);
+    const err = extractNpError(data);
+    if (err) {
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: 'financial_technical_indicators',
+        message: err,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+    return data;
   },
 
   // ---------------------------------------------------------------------------

@@ -23,6 +23,8 @@ import GofrPlotHealthCheck from './pages/GofrPlotHealthCheck';
 import GofrPlotDiscovery from './pages/GofrPlotDiscovery';
 import GofrPlotSessions from './pages/GofrPlotSessions';
 import GofrPlotBuilder from './pages/GofrPlotBuilder';
+import GofrNpHealthCheck from './pages/GofrNpHealthCheck';
+import GofrNpTools from './pages/GofrNpTools';
 import { MonitorHeart, Search, Storage, Build, Description } from '@mui/icons-material';
 import { logger } from './services/logging';
 
@@ -65,6 +67,11 @@ function App() {
     { path: '/gofr-plot/discovery', icon: <Search />, label: 'Discovery' },
     { path: '/gofr-plot/sessions', icon: <Storage />, label: 'Sessions' },
     { path: '/gofr-plot/builder', icon: <Build />, label: 'Builder' },
+  ];
+
+  const gofrNpNavItems = [
+    { path: '/gofr-np/health', icon: <MonitorHeart />, label: 'Health' },
+    { path: '/gofr-np/tools', icon: <Build />, label: 'Tools' },
   ];
 
   return (
@@ -214,6 +221,26 @@ function App() {
             navItems={gofrPlotNavItems}
           >
             <GofrPlotBuilder />
+          </ServiceShell>
+        } />
+
+        <Route path="/gofr-np" element={<Navigate to="/gofr-np/health" replace />} />
+        <Route path="/gofr-np/health" element={
+          <ServiceShell
+            serviceName="GOFR-NP"
+            serviceRoute="/gofr-np"
+            navItems={gofrNpNavItems}
+          >
+            <GofrNpHealthCheck />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-np/tools" element={
+          <ServiceShell
+            serviceName="GOFR-NP"
+            serviceRoute="/gofr-np"
+            navItems={gofrNpNavItems}
+          >
+            <GofrNpTools />
           </ServiceShell>
         } />
         </Routes>

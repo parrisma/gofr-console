@@ -74,6 +74,17 @@ export default function ServiceShell({ children, serviceName, serviceRoute, navI
         'Tip: Plot tools are served by GOFR-DOC (not a separate plot service).',
       ];
     }
+    if (serviceName === 'GOFR-NP') {
+      return [
+        'GOFR-NP quick start',
+        '',
+        '1) Open Tools and choose a function',
+        '2) Edit the JSON payload and validate it',
+        '3) Run the tool and review output (raw response always available)',
+        '',
+        'Tip: curve_fit model_id is in-memory; run curve_predict right after curve_fit.',
+      ];
+    }
     return ['Help is not available for this service yet.'];
   })();
 

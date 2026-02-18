@@ -6,6 +6,9 @@
 3. when ask to write something always do it in a doc if it is more than a few sentences
 4. for technical answers always reply in plain text and avoid markdown formatting
 5. avoid using localhost use docker names or known IP and ports for services
+6. **ASCII only in code and output.** Never use emoji, Unicode symbols, or box-drawing characters (e.g. arrows, check marks, bullet points, decorative borders). Use plain ASCII equivalents: `-` for bullets, `->` for arrows, `[Y]`/`[N]` for pass/fail, `<=`/`!=` for comparisons, `---`/`===` for separators.
+7. **NEVER** execute any GIT commands without being asked directly by user.
+8. **NEVER rewrite pushed commits.** Do NOT use `git commit --amend`, `git rebase -i`, or any other history-rewriting command on commits that have already been pushed to origin. This causes the local and remote branches to diverge, requiring force-pushes and risking lost work. If a pushed commit needs fixing, make a follow-up commit. Keeping local and remote in sync is non-negotiable.
 
 ## CHANGE PROCESS
 1. For any change > than a few simple lines the process is
