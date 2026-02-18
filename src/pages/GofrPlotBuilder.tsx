@@ -25,6 +25,7 @@ import type {
   PlotGetImageResponse,
   PlotAddPlotFragmentResponse,
   PlotFormat,
+  DocListActiveSessionsResponse,
   DocListSessionFragmentsResponse,
 } from '../types/gofrDoc';
 import TokenSelect from '../components/common/TokenSelect';
@@ -116,6 +117,10 @@ export default function GofrPlotBuilder() {
   const [sessionFragmentsLoading, setSessionFragmentsLoading] = useState(false);
   const [sessionFragmentsErr, setSessionFragmentsErr] = useState<unknown>(null);
   const [sessionFragmentsRes, setSessionFragmentsRes] = useState<DocListSessionFragmentsResponse | null>(null);
+
+  const [docSessionsLoading, setDocSessionsLoading] = useState(false);
+  const [docSessionsErr, setDocSessionsErr] = useState<unknown>(null);
+  const [docSessionsRes, setDocSessionsRes] = useState<DocListActiveSessionsResponse | null>(null);
 
   const [embedLoading, setEmbedLoading] = useState(false);
   const [embedErr, setEmbedErr] = useState<unknown>(null);
@@ -368,6 +373,45 @@ export default function GofrPlotBuilder() {
       });
     } finally {
       setSessionFragmentsLoading(false);
+    }
+  };
+
+  const loadDocSessions = async () => {
+    const token = requireToken();
+    const requestId = logger.createRequestId();
+    const startedAt = performance.now();
+
+    setDocSessionsLoading(true);
+    setDocSessionsErr(null);
+    setDocSessionsRes(null);
+
+    try {
+      const res = await api.docListActiveSessions(token);
+      setDocSessionsRes(res);
+
+      logger.info({
+        event: 'ui_form_submitted',
+        message: 'list_active_sessions succeeded (embed session dropdown)',
+        request_id: requestId,
+        component: 'GofrPlotBuilder',
+        operation: 'list_active_sessions',
+        result: 'success',
+        duration_ms: Math.round(performance.now() - startedAt),
+      });
+    } catch (e) {
+      setDocSessionsErr(e);
+      logger.error({
+        event: 'ui_form_submitted',
+        message: 'list_active_sessions failed (embed session dropdown)',
+        request_id: requestId,
+        component: 'GofrPlotBuilder',
+        operation: 'list_active_sessions',
+        result: 'failure',
+        duration_ms: Math.round(performance.now() - startedAt),
+        data: { cause: e instanceof Error ? e.message : 'unknown' },
+      });
+    } finally {
+      setDocSessionsLoading(false);
     }
   };
 
@@ -751,12 +795,33 @@ export default function GofrPlotBuilder() {
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
             <TextField
+              select
               label="session_id"
               value={embedSessionId}
               onChange={(e) => setEmbedSessionId(e.target.value)}
               size="small"
-              sx={{ minWidth: 420 }}
-            />
+              sx={{ minWidth: 520 }}
+              SelectProps={{ native: true }}
+              InputLabelProps={{ shrink: true }}
+              helperText="Pick an existing GOFR-DOC session (or type in Sessions page and paste here if needed)"
+            >
+              <option value="" />
+              {(docSessionsRes?.sessions ?? []).map((s) => (
+                <option key={s.session_id} value={s.session_id}>
+                  {(s.alias ? `${s.alias} — ` : '')}{s.session_id}{s.template_id ? ` (${s.template_id})` : ''}
+                </option>
+              ))}
+            </TextField>
+            <Button
+              variant="outlined"
+              onClick={loadDocSessions}
+              disabled={docSessionsLoading || uiState.selectedTokenIndex < 0}
+              startIcon={docSessionsLoading ? <CircularProgress size={16} /> : undefined}
+            >
+              {docSessionsLoading ? 'Loading…' : 'Load sessions'}
+            </Button>
+            <RequestPreview tool="list_active_sessions" args={{ auth_token: '(token omitted)', token: '(token omitted)' }} />
+            <RawResponsePopupIcon title="list_active_sessions raw" data={docSessionsRes ?? docSessionsErr ?? null} />
             <Button
               variant="outlined"
               onClick={loadSessionFragments}
@@ -768,6 +833,8 @@ export default function GofrPlotBuilder() {
             <RequestPreview tool="list_session_fragments" args={{ session_id: embedSessionId, auth_token: '(token omitted)', token: '(token omitted)' }} />
             <RawResponsePopupIcon title="list_session_fragments raw" data={sessionFragmentsRes ?? sessionFragmentsErr ?? null} />
           </Box>
+
+          {docSessionsErr ? <ToolErrorAlert err={docSessionsErr} fallback="list_active_sessions failed" /> : null}
 
           {sessionFragmentsErr ? <ToolErrorAlert err={sessionFragmentsErr} fallback="list_session_fragments failed" /> : null}
 
