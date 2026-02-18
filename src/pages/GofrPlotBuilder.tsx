@@ -803,7 +803,7 @@ export default function GofrPlotBuilder() {
               sx={{ minWidth: 520 }}
               SelectProps={{ native: true }}
               InputLabelProps={{ shrink: true }}
-              helperText="Pick an existing GOFR-DOC session (or type in Sessions page and paste here if needed)"
+              helperText="Pick an active GOFR-DOC session"
             >
               <option value="" />
               {(docSessionsRes?.sessions ?? []).map((s) => (
