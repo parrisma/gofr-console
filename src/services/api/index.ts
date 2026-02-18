@@ -57,6 +57,14 @@ import type {
   DocSetGlobalParametersResponse,
   DocTemplateDetailsResponse,
   DocValidateParametersResponse,
+  PlotAddPlotFragmentResponse,
+  PlotGetImageResponse,
+  PlotListHandlersResponse,
+  PlotListImagesResponse,
+  PlotListThemesResponse,
+  PlotRenderGraphInlineMeta,
+  PlotRenderGraphProxyData,
+  PlotRenderGraphResponse,
 } from '../../types/gofrDoc';
 
 // Dynamic base URL based on config
@@ -85,7 +93,9 @@ interface JsonRpcResponse<T = unknown> {
 interface HealthCheckResult {
   content: Array<{
     type: string;
-    text: string;
+    text?: string;
+    data?: string;
+    mimeType?: string;
   }>;
 }
 
@@ -136,6 +146,23 @@ function getTextContent(result: HealthCheckResult, service: string, tool: string
     });
   }
   return textContent;
+}
+
+function getImageContent(
+  result: HealthCheckResult,
+  service: string,
+  tool: string,
+): { data: string; mimeType: string } {
+  const image = result.content?.find(c => c.type === 'image');
+  if (!image?.data || !image?.mimeType) {
+    throw new ApiError({
+      service,
+      tool,
+      message: 'No image content returned',
+      recovery: 'If proxy mode was enabled, call get_image with the returned GUID. Otherwise check the tool output for errors.',
+    });
+  }
+  return { data: image.data, mimeType: image.mimeType };
 }
 
 /**
@@ -1040,6 +1067,90 @@ export const api = {
     const result = await client.callTool<HealthCheckResult>('get_document', params);
     const textContent = getTextContent(result, 'gofr-doc', 'get_document');
     return parseToolText<DocGetDocumentResponse>('gofr-doc', 'get_document', textContent);
+  },
+
+  // ---------------------------------------------------------------------------
+  // GOFR-PLOT (via GOFR-DOC plot tools)
+  // ---------------------------------------------------------------------------
+
+  docPlotListThemes: async (): Promise<PlotListThemesResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_themes', {});
+    const textContent = getTextContent(result, 'gofr-doc', 'list_themes');
+    return parseToolText<PlotListThemesResponse>('gofr-doc', 'list_themes', textContent);
+  },
+
+  docPlotListHandlers: async (): Promise<PlotListHandlersResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_handlers', {});
+    const textContent = getTextContent(result, 'gofr-doc', 'list_handlers');
+    return parseToolText<PlotListHandlersResponse>('gofr-doc', 'list_handlers', textContent);
+  },
+
+  docPlotListImages: async (authToken: string): Promise<PlotListImagesResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_images', {
+      auth_token: authToken,
+      token: authToken,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'list_images');
+    return parseToolText<PlotListImagesResponse>('gofr-doc', 'list_images', textContent);
+  },
+
+  docPlotGetImage: async (authToken: string, identifier: string): Promise<PlotGetImageResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('get_image', {
+      auth_token: authToken,
+      token: authToken,
+      identifier,
+    });
+
+    const image = getImageContent(result, 'gofr-doc', 'get_image');
+    const textContent = getTextContent(result, 'gofr-doc', 'get_image');
+    const meta = parseToolText<PlotGetImageResponse['meta']>('gofr-doc', 'get_image', textContent);
+
+    return { image, meta };
+  },
+
+  docPlotRenderGraph: async (
+    authToken: string,
+    params: Record<string, unknown>,
+  ): Promise<PlotRenderGraphResponse> => {
+    const client = getMcpClient('gofr-doc');
+
+    const result = await client.callTool<HealthCheckResult>('render_graph', {
+      auth_token: authToken,
+      token: authToken,
+      ...params,
+    });
+
+    // Proxy mode returns JSON text only; inline mode returns image + JSON meta.
+    const hasImage = Boolean(result.content?.some((c) => c.type === 'image'));
+    const textContent = getTextContent(result, 'gofr-doc', 'render_graph');
+
+    if (!hasImage) {
+      const data = parseToolText<PlotRenderGraphProxyData>('gofr-doc', 'render_graph', textContent);
+      return { mode: 'proxy', data };
+    }
+
+    const image = getImageContent(result, 'gofr-doc', 'render_graph');
+    const meta = parseToolText<PlotRenderGraphInlineMeta>('gofr-doc', 'render_graph', textContent);
+
+    return { mode: 'inline', image, meta };
+  },
+
+  docPlotAddPlotFragment: async (
+    authToken: string,
+    args: Record<string, unknown>,
+  ): Promise<PlotAddPlotFragmentResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('add_plot_fragment', {
+      auth_token: authToken,
+      token: authToken,
+      ...args,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'add_plot_fragment');
+    return parseToolText<PlotAddPlotFragmentResponse>('gofr-doc', 'add_plot_fragment', textContent);
   },
 
   // Get current environment info

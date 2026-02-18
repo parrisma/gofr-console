@@ -62,6 +62,18 @@ export default function ServiceShell({ children, serviceName, serviceRoute, navI
         'Tip: Sessions/Builder/Render require a token. Discovery tools do not.',
       ];
     }
+    if (serviceName === 'GOFR-PLOT') {
+      return [
+        'GOFR-PLOT quick start',
+        '',
+        '1) Discovery: browse themes and chart types (no token required)',
+        '2) Builder: select a token, render a plot (inline or proxy)',
+        '3) Sessions: list stored proxy images and fetch via get_image',
+        '4) Embed: in Builder, add_plot_fragment into a GOFR-DOC session',
+        '',
+        'Tip: Plot tools are served by GOFR-DOC (not a separate plot service).',
+      ];
+    }
     return ['Help is not available for this service yet.'];
   })();
 

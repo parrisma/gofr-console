@@ -57,9 +57,9 @@ export default function Dashboard() {
       name: 'GOFR-PLOT',
       label: 'Visualization',
       status: 'up',
-      route: null,
-      nextAction: 'Coming soon',
-      nextRoute: null,
+      route: '/gofr-plot/health',
+      nextAction: 'Open Plot Health',
+      nextRoute: '/gofr-plot/health',
     },
     {
       name: 'GOFR-DOC',

@@ -19,6 +19,10 @@ import GofrDocDiscovery from './pages/GofrDocDiscovery';
 import GofrDocSessions from './pages/GofrDocSessions';
 import GofrDocBuilder from './pages/GofrDocBuilder';
 import GofrDocRenderProxy from './pages/GofrDocRenderProxy';
+import GofrPlotHealthCheck from './pages/GofrPlotHealthCheck';
+import GofrPlotDiscovery from './pages/GofrPlotDiscovery';
+import GofrPlotSessions from './pages/GofrPlotSessions';
+import GofrPlotBuilder from './pages/GofrPlotBuilder';
 import { MonitorHeart, Search, Storage, Build, Description } from '@mui/icons-material';
 import { logger } from './services/logging';
 
@@ -54,6 +58,13 @@ function App() {
     { path: '/gofr-doc/sessions', icon: <Storage />, label: 'Sessions' },
     { path: '/gofr-doc/builder', icon: <Build />, label: 'Builder' },
     { path: '/gofr-doc/render', icon: <Description />, label: 'Render' },
+  ];
+
+  const gofrPlotNavItems = [
+    { path: '/gofr-plot/health', icon: <MonitorHeart />, label: 'Health' },
+    { path: '/gofr-plot/discovery', icon: <Search />, label: 'Discovery' },
+    { path: '/gofr-plot/sessions', icon: <Storage />, label: 'Sessions' },
+    { path: '/gofr-plot/builder', icon: <Build />, label: 'Builder' },
   ];
 
   return (
@@ -165,6 +176,44 @@ function App() {
             navItems={gofrDocNavItems}
           >
             <GofrDocRenderProxy />
+          </ServiceShell>
+        } />
+
+        <Route path="/gofr-plot" element={<Navigate to="/gofr-plot/health" replace />} />
+        <Route path="/gofr-plot/health" element={
+          <ServiceShell
+            serviceName="GOFR-PLOT"
+            serviceRoute="/gofr-plot"
+            navItems={gofrPlotNavItems}
+          >
+            <GofrPlotHealthCheck />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-plot/discovery" element={
+          <ServiceShell
+            serviceName="GOFR-PLOT"
+            serviceRoute="/gofr-plot"
+            navItems={gofrPlotNavItems}
+          >
+            <GofrPlotDiscovery />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-plot/sessions" element={
+          <ServiceShell
+            serviceName="GOFR-PLOT"
+            serviceRoute="/gofr-plot"
+            navItems={gofrPlotNavItems}
+          >
+            <GofrPlotSessions />
+          </ServiceShell>
+        } />
+        <Route path="/gofr-plot/builder" element={
+          <ServiceShell
+            serviceName="GOFR-PLOT"
+            serviceRoute="/gofr-plot"
+            navItems={gofrPlotNavItems}
+          >
+            <GofrPlotBuilder />
           </ServiceShell>
         } />
         </Routes>
