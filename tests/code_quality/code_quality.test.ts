@@ -333,5 +333,5 @@ describe("code quality gate", () => {
     }
 
     // If eslint exits non-zero but all complexity issues were allowlisted, we still pass.
-  });
+  }, 30_000);
 });

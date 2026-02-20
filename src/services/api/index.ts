@@ -40,6 +40,7 @@ import type {
 } from '../../types/gofrDig';
 import type {
   NpCurveFitResponse,
+  NpErrorResponse,
   NpFinancialBondPriceResponse,
   NpFinancialConvertRateResponse,
   NpFinancialOptionPriceResponse,
@@ -320,6 +321,53 @@ function extractNpError(data: unknown): string | null {
   if (!data || typeof data !== 'object') return null;
   const obj = data as Record<string, unknown>;
   return typeof obj.error === 'string' ? obj.error : null;
+}
+
+function getNpAuthTokenFromConfig(): string | undefined {
+  const tokens = configStore.tokens;
+  if (!tokens || tokens.length === 0) return undefined;
+
+  const preferred =
+    tokens.find((t) => t.name === 'all' && t.token) ??
+    tokens.find((t) => t.name === 'admin' && t.token) ??
+    tokens.find((t) => t.token);
+  return preferred?.token;
+}
+
+async function callNpToolWithAuthFallback<T>(toolName: string, args: Record<string, unknown> = {}): Promise<T> {
+  const client = getMcpClient('gofr-np');
+
+  // First attempt: no auth (historically public)
+  const first = await client.callTool<HealthCheckResult>(toolName, args);
+  const firstText = getTextContent(first, 'gofr-np', toolName);
+  const firstData = parseToolText<T | NpErrorResponse>('gofr-np', toolName, firstText);
+  const firstErr = extractNpError(firstData);
+  if (!firstErr) return firstData as T;
+
+  // Retry once with auth token if the service now requires it.
+  if (/^AUTH_REQUIRED\b/i.test(firstErr)) {
+    const token = getNpAuthTokenFromConfig();
+    if (token) {
+      const second = await client.callTool<HealthCheckResult>(toolName, args, token);
+      const secondText = getTextContent(second, 'gofr-np', toolName);
+      const secondData = parseToolText<T | NpErrorResponse>('gofr-np', toolName, secondText);
+      const secondErr = extractNpError(secondData);
+      if (!secondErr) return secondData as T;
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: toolName,
+        message: secondErr,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+  }
+
+  throw new ApiError({
+    service: 'gofr-np',
+    tool: toolName,
+    message: firstErr,
+    recovery: defaultRecoveryHint(),
+  });
 }
 
 // Test hook (intentionally not documented as public API)
@@ -851,156 +899,39 @@ export const api = {
   },
 
   npMathListOperations: async (): Promise<NpMathListOperationsResponse> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('math_list_operations', {});
-    const textContent = getTextContent(result, 'gofr-np', 'math_list_operations');
-    const data = parseToolText<NpMathListOperationsResponse>('gofr-np', 'math_list_operations', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'math_list_operations',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpMathListOperationsResponse>('math_list_operations', {});
   },
 
   npMathCompute: async (args: Record<string, unknown>): Promise<NpMathResult> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('math_compute', args);
-    const textContent = getTextContent(result, 'gofr-np', 'math_compute');
-    const data = parseToolText<NpMathResult>('gofr-np', 'math_compute', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'math_compute',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpMathResult>('math_compute', args);
   },
 
   npCurveFit: async (args: Record<string, unknown>): Promise<NpCurveFitResponse> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('curve_fit', args);
-    const textContent = getTextContent(result, 'gofr-np', 'curve_fit');
-    const data = parseToolText<NpCurveFitResponse>('gofr-np', 'curve_fit', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'curve_fit',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpCurveFitResponse>('curve_fit', args);
   },
 
   npCurvePredict: async (args: Record<string, unknown>): Promise<NpMathResult> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('curve_predict', args);
-    const textContent = getTextContent(result, 'gofr-np', 'curve_predict');
-    const data = parseToolText<NpMathResult>('gofr-np', 'curve_predict', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'curve_predict',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpMathResult>('curve_predict', args);
   },
 
   npFinancialPv: async (args: Record<string, unknown>): Promise<NpFinancialPvResponse> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('financial_pv', args);
-    const textContent = getTextContent(result, 'gofr-np', 'financial_pv');
-    const data = parseToolText<NpFinancialPvResponse>('gofr-np', 'financial_pv', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'financial_pv',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpFinancialPvResponse>('financial_pv', args);
   },
 
   npFinancialConvertRate: async (args: Record<string, unknown>): Promise<NpFinancialConvertRateResponse> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('financial_convert_rate', args);
-    const textContent = getTextContent(result, 'gofr-np', 'financial_convert_rate');
-    const data = parseToolText<NpFinancialConvertRateResponse>('gofr-np', 'financial_convert_rate', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'financial_convert_rate',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpFinancialConvertRateResponse>('financial_convert_rate', args);
   },
 
   npFinancialOptionPrice: async (args: Record<string, unknown>): Promise<NpFinancialOptionPriceResponse> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('financial_option_price', args);
-    const textContent = getTextContent(result, 'gofr-np', 'financial_option_price');
-    const data = parseToolText<NpFinancialOptionPriceResponse>('gofr-np', 'financial_option_price', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'financial_option_price',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpFinancialOptionPriceResponse>('financial_option_price', args);
   },
 
   npFinancialBondPrice: async (args: Record<string, unknown>): Promise<NpFinancialBondPriceResponse> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('financial_bond_price', args);
-    const textContent = getTextContent(result, 'gofr-np', 'financial_bond_price');
-    const data = parseToolText<NpFinancialBondPriceResponse>('gofr-np', 'financial_bond_price', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'financial_bond_price',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpFinancialBondPriceResponse>('financial_bond_price', args);
   },
 
   npFinancialTechnicalIndicators: async (args: Record<string, unknown>): Promise<NpFinancialTechnicalIndicatorsResponse> => {
-    const client = getMcpClient('gofr-np');
-    const result = await client.callTool<HealthCheckResult>('financial_technical_indicators', args);
-    const textContent = getTextContent(result, 'gofr-np', 'financial_technical_indicators');
-    const data = parseToolText<NpFinancialTechnicalIndicatorsResponse>('gofr-np', 'financial_technical_indicators', textContent);
-    const err = extractNpError(data);
-    if (err) {
-      throw new ApiError({
-        service: 'gofr-np',
-        tool: 'financial_technical_indicators',
-        message: err,
-        recovery: defaultRecoveryHint(),
-      });
-    }
-    return data;
+    return callNpToolWithAuthFallback<NpFinancialTechnicalIndicatorsResponse>('financial_technical_indicators', args);
   },
 
   // ---------------------------------------------------------------------------
