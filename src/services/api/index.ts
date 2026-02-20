@@ -39,6 +39,18 @@ import type {
   StructureOptions,
 } from '../../types/gofrDig';
 import type {
+  NpCurveFitResponse,
+  NpErrorResponse,
+  NpFinancialBondPriceResponse,
+  NpFinancialConvertRateResponse,
+  NpFinancialOptionPriceResponse,
+  NpFinancialPvResponse,
+  NpFinancialTechnicalIndicatorsResponse,
+  NpMathListOperationsResponse,
+  NpMathResult,
+  NpPingResponse,
+} from '../../types/gofrNp';
+import type {
   DocAddFragmentResponse,
   DocAddImageFragmentResponse,
   DocAbortSessionResponse,
@@ -57,6 +69,14 @@ import type {
   DocSetGlobalParametersResponse,
   DocTemplateDetailsResponse,
   DocValidateParametersResponse,
+  PlotAddPlotFragmentResponse,
+  PlotGetImageResponse,
+  PlotListHandlersResponse,
+  PlotListImagesResponse,
+  PlotListThemesResponse,
+  PlotRenderGraphInlineMeta,
+  PlotRenderGraphProxyData,
+  PlotRenderGraphResponse,
 } from '../../types/gofrDoc';
 
 // Dynamic base URL based on config
@@ -85,7 +105,9 @@ interface JsonRpcResponse<T = unknown> {
 interface HealthCheckResult {
   content: Array<{
     type: string;
-    text: string;
+    text?: string;
+    data?: string;
+    mimeType?: string;
   }>;
 }
 
@@ -136,6 +158,23 @@ function getTextContent(result: HealthCheckResult, service: string, tool: string
     });
   }
   return textContent;
+}
+
+function getImageContent(
+  result: HealthCheckResult,
+  service: string,
+  tool: string,
+): { data: string; mimeType: string } {
+  const image = result.content?.find(c => c.type === 'image');
+  if (!image?.data || !image?.mimeType) {
+    throw new ApiError({
+      service,
+      tool,
+      message: 'No image content returned',
+      recovery: 'If proxy mode was enabled, call get_image with the returned GUID. Otherwise check the tool output for errors.',
+    });
+  }
+  return { data: image.data, mimeType: image.mimeType };
 }
 
 /**
@@ -278,6 +317,59 @@ function parseToolText<T>(
   }
 }
 
+function extractNpError(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const obj = data as Record<string, unknown>;
+  return typeof obj.error === 'string' ? obj.error : null;
+}
+
+function getNpAuthTokenFromConfig(): string | undefined {
+  const tokens = configStore.tokens;
+  if (!tokens || tokens.length === 0) return undefined;
+
+  const preferred =
+    tokens.find((t) => t.name === 'all' && t.token) ??
+    tokens.find((t) => t.name === 'admin' && t.token) ??
+    tokens.find((t) => t.token);
+  return preferred?.token;
+}
+
+async function callNpToolWithAuthFallback<T>(toolName: string, args: Record<string, unknown> = {}): Promise<T> {
+  const client = getMcpClient('gofr-np');
+
+  // First attempt: no auth (historically public)
+  const first = await client.callTool<HealthCheckResult>(toolName, args);
+  const firstText = getTextContent(first, 'gofr-np', toolName);
+  const firstData = parseToolText<T | NpErrorResponse>('gofr-np', toolName, firstText);
+  const firstErr = extractNpError(firstData);
+  if (!firstErr) return firstData as T;
+
+  // Retry once with auth token if the service now requires it.
+  if (/^AUTH_REQUIRED\b/i.test(firstErr)) {
+    const token = getNpAuthTokenFromConfig();
+    if (token) {
+      const second = await client.callTool<HealthCheckResult>(toolName, args, token);
+      const secondText = getTextContent(second, 'gofr-np', toolName);
+      const secondData = parseToolText<T | NpErrorResponse>('gofr-np', toolName, secondText);
+      const secondErr = extractNpError(secondData);
+      if (!secondErr) return secondData as T;
+      throw new ApiError({
+        service: 'gofr-np',
+        tool: toolName,
+        message: secondErr,
+        recovery: defaultRecoveryHint(),
+      });
+    }
+  }
+
+  throw new ApiError({
+    service: 'gofr-np',
+    tool: toolName,
+    message: firstErr,
+    recovery: defaultRecoveryHint(),
+  });
+}
+
 // Test hook (intentionally not documented as public API)
 // Allows unit tests to validate MCP parsing behavior.
 export const __test__parseToolText = parseToolText;
@@ -321,6 +413,12 @@ class McpClient {
     return configStore.getMcpPort(this.serviceName);
   }
 
+  private getMcpEndpointUrl(): string {
+    // Most MCP services are reachable at /mcp/ via our proxies.
+    // GOFR-IQ redirects /mcp/ -> /mcp (307), so we must call it without the trailing slash.
+    return `${this.baseUrl}${this.serviceName === 'gofr-iq' ? '/mcp' : '/mcp/'}`;
+  }
+
   // Initialize MCP session (with mutex to prevent concurrent races)
   async initialize(): Promise<void> {
     // If another caller is already initializing, piggy-back on that promise
@@ -359,7 +457,7 @@ class McpClient {
         },
       };
 
-      const response = await fetch(`${this.baseUrl}/mcp/`, {
+      const response = await fetch(this.getMcpEndpointUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -418,7 +516,7 @@ class McpClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), NOTIFY_TIMEOUT_MS);
     try {
-      await fetch(`${this.baseUrl}/mcp/`, {
+      await fetch(this.getMcpEndpointUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -504,7 +602,7 @@ class McpClient {
     );
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/mcp/`, {
+      response = await fetch(this.getMcpEndpointUrl(), {
         method: 'POST',
         headers,
         body: JSON.stringify(request),
@@ -774,6 +872,69 @@ export const api = {
   },
 
   // ---------------------------------------------------------------------------
+  // Generic MCP helpers
+  // ---------------------------------------------------------------------------
+
+  mcpPing: async (serviceName: string): Promise<boolean> => {
+    try {
+      const client = getMcpClient(serviceName);
+      const result = await client.callTool<HealthCheckResult>('ping', {});
+      // Consider it reachable if we got any text payload back.
+      getTextContent(result, serviceName, 'ping');
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // GOFR-NP (MCP, public)
+  // ---------------------------------------------------------------------------
+
+  npPing: async (): Promise<NpPingResponse> => {
+    const client = getMcpClient('gofr-np');
+    const result = await client.callTool<HealthCheckResult>('ping', {});
+    const textContent = getTextContent(result, 'gofr-np', 'ping');
+    return parseToolText<NpPingResponse>('gofr-np', 'ping', textContent);
+  },
+
+  npMathListOperations: async (): Promise<NpMathListOperationsResponse> => {
+    return callNpToolWithAuthFallback<NpMathListOperationsResponse>('math_list_operations', {});
+  },
+
+  npMathCompute: async (args: Record<string, unknown>): Promise<NpMathResult> => {
+    return callNpToolWithAuthFallback<NpMathResult>('math_compute', args);
+  },
+
+  npCurveFit: async (args: Record<string, unknown>): Promise<NpCurveFitResponse> => {
+    return callNpToolWithAuthFallback<NpCurveFitResponse>('curve_fit', args);
+  },
+
+  npCurvePredict: async (args: Record<string, unknown>): Promise<NpMathResult> => {
+    return callNpToolWithAuthFallback<NpMathResult>('curve_predict', args);
+  },
+
+  npFinancialPv: async (args: Record<string, unknown>): Promise<NpFinancialPvResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialPvResponse>('financial_pv', args);
+  },
+
+  npFinancialConvertRate: async (args: Record<string, unknown>): Promise<NpFinancialConvertRateResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialConvertRateResponse>('financial_convert_rate', args);
+  },
+
+  npFinancialOptionPrice: async (args: Record<string, unknown>): Promise<NpFinancialOptionPriceResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialOptionPriceResponse>('financial_option_price', args);
+  },
+
+  npFinancialBondPrice: async (args: Record<string, unknown>): Promise<NpFinancialBondPriceResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialBondPriceResponse>('financial_bond_price', args);
+  },
+
+  npFinancialTechnicalIndicators: async (args: Record<string, unknown>): Promise<NpFinancialTechnicalIndicatorsResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialTechnicalIndicatorsResponse>('financial_technical_indicators', args);
+  },
+
+  // ---------------------------------------------------------------------------
   // GOFR-DOC (MCP)
   // ---------------------------------------------------------------------------
 
@@ -1040,6 +1201,90 @@ export const api = {
     const result = await client.callTool<HealthCheckResult>('get_document', params);
     const textContent = getTextContent(result, 'gofr-doc', 'get_document');
     return parseToolText<DocGetDocumentResponse>('gofr-doc', 'get_document', textContent);
+  },
+
+  // ---------------------------------------------------------------------------
+  // GOFR-PLOT (via GOFR-DOC plot tools)
+  // ---------------------------------------------------------------------------
+
+  docPlotListThemes: async (): Promise<PlotListThemesResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_themes', {});
+    const textContent = getTextContent(result, 'gofr-doc', 'list_themes');
+    return parseToolText<PlotListThemesResponse>('gofr-doc', 'list_themes', textContent);
+  },
+
+  docPlotListHandlers: async (): Promise<PlotListHandlersResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_handlers', {});
+    const textContent = getTextContent(result, 'gofr-doc', 'list_handlers');
+    return parseToolText<PlotListHandlersResponse>('gofr-doc', 'list_handlers', textContent);
+  },
+
+  docPlotListImages: async (authToken: string): Promise<PlotListImagesResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('list_images', {
+      auth_token: authToken,
+      token: authToken,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'list_images');
+    return parseToolText<PlotListImagesResponse>('gofr-doc', 'list_images', textContent);
+  },
+
+  docPlotGetImage: async (authToken: string, identifier: string): Promise<PlotGetImageResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('get_image', {
+      auth_token: authToken,
+      token: authToken,
+      identifier,
+    });
+
+    const image = getImageContent(result, 'gofr-doc', 'get_image');
+    const textContent = getTextContent(result, 'gofr-doc', 'get_image');
+    const meta = parseToolText<PlotGetImageResponse['meta']>('gofr-doc', 'get_image', textContent);
+
+    return { image, meta };
+  },
+
+  docPlotRenderGraph: async (
+    authToken: string,
+    params: Record<string, unknown>,
+  ): Promise<PlotRenderGraphResponse> => {
+    const client = getMcpClient('gofr-doc');
+
+    const result = await client.callTool<HealthCheckResult>('render_graph', {
+      auth_token: authToken,
+      token: authToken,
+      ...params,
+    });
+
+    // Proxy mode returns JSON text only; inline mode returns image + JSON meta.
+    const hasImage = Boolean(result.content?.some((c) => c.type === 'image'));
+    const textContent = getTextContent(result, 'gofr-doc', 'render_graph');
+
+    if (!hasImage) {
+      const data = parseToolText<PlotRenderGraphProxyData>('gofr-doc', 'render_graph', textContent);
+      return { mode: 'proxy', data };
+    }
+
+    const image = getImageContent(result, 'gofr-doc', 'render_graph');
+    const meta = parseToolText<PlotRenderGraphInlineMeta>('gofr-doc', 'render_graph', textContent);
+
+    return { mode: 'inline', image, meta };
+  },
+
+  docPlotAddPlotFragment: async (
+    authToken: string,
+    args: Record<string, unknown>,
+  ): Promise<PlotAddPlotFragmentResponse> => {
+    const client = getMcpClient('gofr-doc');
+    const result = await client.callTool<HealthCheckResult>('add_plot_fragment', {
+      auth_token: authToken,
+      token: authToken,
+      ...args,
+    });
+    const textContent = getTextContent(result, 'gofr-doc', 'add_plot_fragment');
+    return parseToolText<PlotAddPlotFragmentResponse>('gofr-doc', 'add_plot_fragment', textContent);
   },
 
   // Get current environment info

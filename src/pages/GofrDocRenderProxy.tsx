@@ -54,6 +54,16 @@ function downloadBlob(bytes: Uint8Array, filename: string, contentType: string):
   URL.revokeObjectURL(url);
 }
 
+function downloadText(text: string, filename: string, contentType: string): void {
+  const blob = new Blob([text], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function GofrDocRenderProxy() {
   const { tokens } = useConfig();
   const { state: uiState, setState: setUiState } = useGofrDocUi();
@@ -264,9 +274,18 @@ export default function GofrDocRenderProxy() {
       // Safe HTML preview: use sandboxed iframe with srcDoc.
       return (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            HTML preview (sandboxed)
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle2" gutterBottom>
+              HTML preview (sandboxed)
+            </Typography>
+            <Button
+              variant="outlined"
+              onClick={() => downloadText(inlineContent, 'document.html', 'text/html;charset=utf-8')}
+              disabled={!inlineContent}
+            >
+              Download HTML
+            </Button>
+          </Box>
           <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
             <iframe
               title="gofr-doc-html-preview"
@@ -282,9 +301,18 @@ export default function GofrDocRenderProxy() {
     if (format === 'md') {
       return (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Markdown
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Markdown
+            </Typography>
+            <Button
+              variant="outlined"
+              onClick={() => downloadText(inlineContent, 'document.md', 'text/markdown;charset=utf-8')}
+              disabled={!inlineContent}
+            >
+              Download Markdown
+            </Button>
+          </Box>
           <JsonBlock data={inlineContent || null} copyLabel="Copy markdown" maxHeight={420} />
         </Box>
       );
@@ -369,7 +397,15 @@ export default function GofrDocRenderProxy() {
       });
 
       if (response.ok) {
-        const ext = contentType.includes('pdf') ? 'pdf' : (contentType.includes('html') ? 'html' : 'bin');
+        const contentTypeLc = contentType.toLowerCase();
+        const ext =
+          format === 'pdf' || contentTypeLc.includes('pdf')
+            ? 'pdf'
+            : format === 'md' || contentTypeLc.includes('markdown')
+              ? 'md'
+              : format === 'html' || contentTypeLc.includes('html')
+                ? 'html'
+                : 'bin';
         downloadBlob(buf, `proxy-${guid}.${ext}`, contentType);
       }
     } catch (e) {

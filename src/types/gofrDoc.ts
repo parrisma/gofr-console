@@ -153,3 +153,85 @@ export interface DocPingResponse {
   service?: string;
   message?: string;
 }
+
+// ---------------------------------------------------------------------------
+// GOFR-PLOT (via GOFR-DOC plot tools)
+// ---------------------------------------------------------------------------
+
+export type PlotFormat = 'png' | 'jpg' | 'svg' | 'pdf';
+
+export type PlotThemeMap = Record<string, string>;
+export type PlotHandlerMap = Record<string, string>;
+
+export interface PlotListThemesResponse {
+  themes?: PlotThemeMap;
+  count?: number;
+}
+
+export interface PlotListHandlersResponse {
+  handlers?: PlotHandlerMap;
+  count?: number;
+}
+
+export interface PlotStoredImageRow {
+  guid: string;
+  format?: string;
+  alias?: string | null;
+  size?: number;
+  created_at?: string | null;
+}
+
+export interface PlotListImagesResponse {
+  images?: PlotStoredImageRow[];
+  count?: number;
+}
+
+export interface PlotInlineImage {
+  data: string;
+  mimeType: string;
+}
+
+export interface PlotGetImageMeta {
+  identifier?: string;
+  format?: string;
+  size_bytes?: number;
+  alias?: string | null;
+}
+
+export interface PlotGetImageResponse {
+  image: PlotInlineImage;
+  meta: PlotGetImageMeta;
+}
+
+export interface PlotRenderGraphInlineMeta {
+  format?: string;
+  theme?: string;
+  type?: string;
+  title?: string;
+}
+
+export interface PlotRenderGraphProxyData {
+  guid: string;
+  format?: string;
+  theme?: string;
+  type?: string;
+  title?: string;
+  size_bytes?: number;
+  alias?: string;
+}
+
+export type PlotRenderGraphResponse =
+  | {
+      mode: 'inline';
+      image: PlotInlineImage;
+      meta: PlotRenderGraphInlineMeta;
+    }
+  | {
+      mode: 'proxy';
+      data: PlotRenderGraphProxyData;
+    };
+
+export interface PlotAddPlotFragmentResponse {
+  fragment_instance_guid?: string;
+  [key: string]: unknown;
+}

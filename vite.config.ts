@@ -41,6 +41,14 @@ proxyConfig['/api/gofr-doc/images'] = {
   rewrite: (path: string) => path.replace(/^\/api\/gofr-doc/, ''),
 };
 
+// gofr-doc proxy document download is served by the web port/container, not the MCP port
+proxyConfig['/api/gofr-doc/proxy'] = {
+  target: `http://gofr-doc-web:8042`,
+  changeOrigin: true,
+  followRedirects: true,
+  rewrite: (path: string) => path.replace(/^\/api\/gofr-doc/, ''),
+};
+
 for (const { name, host, port } of mcpServices) {
   proxyConfig[`/api/${name}`] = {
     target: `http://${host}:${port}`,

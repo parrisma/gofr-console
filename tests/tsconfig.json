@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "Node16",
+    "moduleResolution": "node16",
+    "types": ["node"],
+    "lib": ["ES2023"],
+    "target": "ES2023"
+  },
+  "include": ["**/*"]
+}

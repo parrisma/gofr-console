@@ -1,0 +1,16 @@
+{
+  "large_files": [
+    "src/pages/GofrDocBuilder.tsx",
+    "src/services/api/index.ts"
+  ],
+  "complexity": [
+    {"file": "src/components/common/DocumentViewDialog.tsx", "function": "DocumentViewDialog"},
+    {"file": "src/pages/Client360View.tsx", "function": "Client360View"},
+    {"file": "src/pages/GofrDig.tsx", "function": "GofrDig"},
+    {"file": "src/pages/GofrDigSessions.tsx", "function": "GofrDigSessions"},
+    {"file": "src/pages/GofrDocBuilder.tsx", "function": "GofrDocBuilder"},
+    {"file": "src/pages/GofrDocSessions.tsx", "function": "GofrDocSessions"},
+    {"file": "src/pages/GofrIQClients.tsx", "function": "GofrIQClients"},
+    {"file": "src/pages/GofrPlotBuilder.tsx", "function": "GofrPlotBuilder"}
+  ]
+}

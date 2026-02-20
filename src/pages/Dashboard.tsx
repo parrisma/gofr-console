@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Box, Button, Card, CardContent, Typography, Grid } from '@mui/material';
-import { CheckCircle } from '@mui/icons-material';
+import { CheckCircle, ErrorOutline, HourglassEmpty } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 
@@ -14,9 +14,26 @@ interface HealthStatus {
   timestamp: string;
 }
 
+type ModuleStatus = 'checking' | 'online' | 'offline';
+
+const MODULES_TO_PING: Array<{ module: string; serviceToPing: string }> = [
+  { module: 'GOFR-IQ', serviceToPing: 'gofr-iq' },
+  { module: 'GOFR-DIG', serviceToPing: 'gofr-dig' },
+  { module: 'GOFR-DOC', serviceToPing: 'gofr-doc' },
+  // GOFR-PLOT is backed by gofr-doc plot tools
+  { module: 'GOFR-PLOT', serviceToPing: 'gofr-doc' },
+  { module: 'GOFR-NP', serviceToPing: 'gofr-np' },
+];
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [health, setHealth] = useState<HealthStatus | null>(null);
+
+  const [moduleStatus, setModuleStatus] = useState<Record<string, ModuleStatus>>(() => {
+    const initial: Record<string, ModuleStatus> = {};
+    for (const m of MODULES_TO_PING) initial[m.module] = 'checking';
+    return initial;
+  });
 
   useEffect(() => {
     api.healthCheck()
@@ -36,11 +53,34 @@ export default function Dashboard() {
       });
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      await Promise.all(
+        MODULES_TO_PING.map(async (m) => {
+          const ok = await api.mcpPing(m.serviceToPing);
+          if (cancelled) return;
+          setModuleStatus((prev) => ({
+            ...prev,
+            [m.module]: ok ? 'online' : 'offline',
+          }));
+        })
+      );
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const services = [
     {
       name: 'GOFR-IQ',
       label: 'Intelligence',
-      status: health?.services.neo4j?.status,
+      status: moduleStatus['GOFR-IQ'] ?? 'checking',
       route: '/gofr-iq/health',
       nextAction: 'Open Client 360',
       nextRoute: '/gofr-iq/client-360',
@@ -48,7 +88,7 @@ export default function Dashboard() {
     {
       name: 'GOFR-DIG',
       label: 'Data Ingestion',
-      status: 'up',
+      status: moduleStatus['GOFR-DIG'] ?? 'checking',
       route: '/gofr-dig',
       nextAction: 'Scrape a URL',
       nextRoute: '/gofr-dig',
@@ -56,15 +96,15 @@ export default function Dashboard() {
     {
       name: 'GOFR-PLOT',
       label: 'Visualization',
-      status: 'up',
-      route: null,
-      nextAction: 'Coming soon',
-      nextRoute: null,
+      status: moduleStatus['GOFR-PLOT'] ?? 'checking',
+      route: '/gofr-plot/health',
+      nextAction: 'Open Plot Health',
+      nextRoute: '/gofr-plot/health',
     },
     {
       name: 'GOFR-DOC',
       label: 'Documentation',
-      status: health?.services.chromadb?.status,
+      status: moduleStatus['GOFR-DOC'] ?? 'checking',
       route: '/gofr-doc',
       nextAction: 'Create a doc session',
       nextRoute: '/gofr-doc/sessions',
@@ -72,12 +112,24 @@ export default function Dashboard() {
     {
       name: 'GOFR-NP',
       label: 'Network & Policy',
-      status: health?.services.llm?.status,
-      route: null,
-      nextAction: 'Coming soon',
-      nextRoute: null,
+      status: moduleStatus['GOFR-NP'] ?? 'checking',
+      route: '/gofr-np/health',
+      nextAction: 'Open NP Tools',
+      nextRoute: '/gofr-np/tools',
     },
   ];
+
+  const statusLabel = (s: unknown): string => {
+    if (s === 'online') return 'Online';
+    if (s === 'offline') return 'Offline';
+    return 'Checking';
+  };
+
+  const statusIcon = (s: unknown) => {
+    if (s === 'online') return <CheckCircle color="success" />;
+    if (s === 'offline') return <ErrorOutline color="error" />;
+    return <HourglassEmpty color="disabled" />;
+  };
 
   return (
     <Box>
@@ -136,11 +188,11 @@ export default function Dashboard() {
             >
               <CardContent>
                 <Box display="flex" alignItems="center" gap={1}>
-                  <CheckCircle color="success" />
+                  {statusIcon(service.status)}
                   <Box>
                     <Typography variant="h6">{service.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {service.label}: Online
+                      {service.label}: {statusLabel(service.status)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                       Next: {service.nextAction}
