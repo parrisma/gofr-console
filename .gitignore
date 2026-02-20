@@ -69,7 +69,7 @@ Thumbs.db
 .vite.pid
 
 # tmp scratch files
-tmp/np_tools.md
+tmp/
 
 # Package manager locks (keep pnpm-lock.yaml)
 # package-lock.json
