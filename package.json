@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:code-quality": "vitest run tests/code_quality -v",
     "test:unit": "vitest run",
     "preview": "vite preview",
     "security": "./scripts/security-scan.sh",

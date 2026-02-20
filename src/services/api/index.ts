@@ -365,6 +365,12 @@ class McpClient {
     return configStore.getMcpPort(this.serviceName);
   }
 
+  private getMcpEndpointUrl(): string {
+    // Most MCP services are reachable at /mcp/ via our proxies.
+    // GOFR-IQ redirects /mcp/ -> /mcp (307), so we must call it without the trailing slash.
+    return `${this.baseUrl}${this.serviceName === 'gofr-iq' ? '/mcp' : '/mcp/'}`;
+  }
+
   // Initialize MCP session (with mutex to prevent concurrent races)
   async initialize(): Promise<void> {
     // If another caller is already initializing, piggy-back on that promise
@@ -403,7 +409,7 @@ class McpClient {
         },
       };
 
-      const response = await fetch(`${this.baseUrl}/mcp/`, {
+      const response = await fetch(this.getMcpEndpointUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -462,7 +468,7 @@ class McpClient {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), NOTIFY_TIMEOUT_MS);
     try {
-      await fetch(`${this.baseUrl}/mcp/`, {
+      await fetch(this.getMcpEndpointUrl(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -548,7 +554,7 @@ class McpClient {
     );
     let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}/mcp/`, {
+      response = await fetch(this.getMcpEndpointUrl(), {
         method: 'POST',
         headers,
         body: JSON.stringify(request),
