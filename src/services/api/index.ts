@@ -17,6 +17,7 @@ import type {
   CreateClientResponse,
   DocumentResponse,
   ClientFeedResponse,
+  WhyItMattersToClientResponse,
   PortfolioHoldingsResponse,
   PortfolioUpdateResponse,
   WatchlistResponse,
@@ -317,10 +318,15 @@ function parseToolText<T>(
   }
 }
 
-function extractNpError(data: unknown): string | null {
+function extractNpErrorInfo(data: unknown): { error: string; detail?: string; recovery?: string } | null {
   if (!data || typeof data !== 'object') return null;
   const obj = data as Record<string, unknown>;
-  return typeof obj.error === 'string' ? obj.error : null;
+  if (typeof obj.error !== 'string') return null;
+  return {
+    error: obj.error,
+    detail: typeof obj.detail === 'string' ? obj.detail : undefined,
+    recovery: typeof obj.recovery === 'string' ? obj.recovery : undefined,
+  };
 }
 
 function getNpAuthTokenFromConfig(): string | undefined {
@@ -334,30 +340,53 @@ function getNpAuthTokenFromConfig(): string | undefined {
   return preferred?.token;
 }
 
-async function callNpToolWithAuthFallback<T>(toolName: string, args: Record<string, unknown> = {}): Promise<T> {
+async function callNpToolWithAuthFallback<T>(
+  toolName: string,
+  args: Record<string, unknown> = {},
+  explicitAuthToken?: string,
+): Promise<T> {
   const client = getMcpClient('gofr-np');
 
-  // First attempt: no auth (historically public)
-  const first = await client.callTool<HealthCheckResult>(toolName, args);
+  const applyAuthToArgs = (baseArgs: Record<string, unknown>, token: string): Record<string, unknown> => {
+    const next: Record<string, unknown> = { ...baseArgs };
+    if (!('auth_token' in next)) next.auth_token = token;
+    if (!('token' in next)) next.token = token;
+    return next;
+  };
+
+  // First attempt: use explicit token if provided, otherwise no auth (historically public)
+  const firstArgs = explicitAuthToken ? applyAuthToArgs(args, explicitAuthToken) : args;
+  const first = await client.callTool<HealthCheckResult>(toolName, firstArgs, explicitAuthToken);
   const firstText = getTextContent(first, 'gofr-np', toolName);
   const firstData = parseToolText<T | NpErrorResponse>('gofr-np', toolName, firstText);
-  const firstErr = extractNpError(firstData);
+  const firstErr = extractNpErrorInfo(firstData);
   if (!firstErr) return firstData as T;
 
+  // If the caller provided a token but it still failed, do not attempt further fallbacks.
+  if (explicitAuthToken) {
+    throw new ApiError({
+      service: 'gofr-np',
+      tool: toolName,
+      message: firstErr.detail ? `${firstErr.error}: ${firstErr.detail}` : firstErr.error,
+      recovery: firstErr.recovery ?? defaultRecoveryHint(),
+    });
+  }
+
   // Retry once with auth token if the service now requires it.
-  if (/^AUTH_REQUIRED\b/i.test(firstErr)) {
+  if (/^AUTH_REQUIRED\b/i.test(firstErr.error)) {
     const token = getNpAuthTokenFromConfig();
     if (token) {
-      const second = await client.callTool<HealthCheckResult>(toolName, args, token);
+      const secondArgs = applyAuthToArgs(args, token);
+      const second = await client.callTool<HealthCheckResult>(toolName, secondArgs, token);
       const secondText = getTextContent(second, 'gofr-np', toolName);
       const secondData = parseToolText<T | NpErrorResponse>('gofr-np', toolName, secondText);
-      const secondErr = extractNpError(secondData);
+      const secondErr = extractNpErrorInfo(secondData);
       if (!secondErr) return secondData as T;
       throw new ApiError({
         service: 'gofr-np',
         tool: toolName,
-        message: secondErr,
-        recovery: defaultRecoveryHint(),
+        message: secondErr.detail ? `${secondErr.error}: ${secondErr.detail}` : secondErr.error,
+        recovery: secondErr.recovery ?? defaultRecoveryHint(),
       });
     }
   }
@@ -365,8 +394,8 @@ async function callNpToolWithAuthFallback<T>(toolName: string, args: Record<stri
   throw new ApiError({
     service: 'gofr-np',
     tool: toolName,
-    message: firstErr,
-    recovery: defaultRecoveryHint(),
+    message: firstErr.detail ? `${firstErr.error}: ${firstErr.detail}` : firstErr.error,
+    recovery: firstErr.recovery ?? defaultRecoveryHint(),
   });
 }
 
@@ -902,36 +931,36 @@ export const api = {
     return callNpToolWithAuthFallback<NpMathListOperationsResponse>('math_list_operations', {});
   },
 
-  npMathCompute: async (args: Record<string, unknown>): Promise<NpMathResult> => {
-    return callNpToolWithAuthFallback<NpMathResult>('math_compute', args);
+  npMathCompute: async (args: Record<string, unknown>, authToken?: string): Promise<NpMathResult> => {
+    return callNpToolWithAuthFallback<NpMathResult>('math_compute', args, authToken);
   },
 
-  npCurveFit: async (args: Record<string, unknown>): Promise<NpCurveFitResponse> => {
-    return callNpToolWithAuthFallback<NpCurveFitResponse>('curve_fit', args);
+  npCurveFit: async (args: Record<string, unknown>, authToken?: string): Promise<NpCurveFitResponse> => {
+    return callNpToolWithAuthFallback<NpCurveFitResponse>('curve_fit', args, authToken);
   },
 
-  npCurvePredict: async (args: Record<string, unknown>): Promise<NpMathResult> => {
-    return callNpToolWithAuthFallback<NpMathResult>('curve_predict', args);
+  npCurvePredict: async (args: Record<string, unknown>, authToken?: string): Promise<NpMathResult> => {
+    return callNpToolWithAuthFallback<NpMathResult>('curve_predict', args, authToken);
   },
 
-  npFinancialPv: async (args: Record<string, unknown>): Promise<NpFinancialPvResponse> => {
-    return callNpToolWithAuthFallback<NpFinancialPvResponse>('financial_pv', args);
+  npFinancialPv: async (args: Record<string, unknown>, authToken?: string): Promise<NpFinancialPvResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialPvResponse>('financial_pv', args, authToken);
   },
 
-  npFinancialConvertRate: async (args: Record<string, unknown>): Promise<NpFinancialConvertRateResponse> => {
-    return callNpToolWithAuthFallback<NpFinancialConvertRateResponse>('financial_convert_rate', args);
+  npFinancialConvertRate: async (args: Record<string, unknown>, authToken?: string): Promise<NpFinancialConvertRateResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialConvertRateResponse>('financial_convert_rate', args, authToken);
   },
 
-  npFinancialOptionPrice: async (args: Record<string, unknown>): Promise<NpFinancialOptionPriceResponse> => {
-    return callNpToolWithAuthFallback<NpFinancialOptionPriceResponse>('financial_option_price', args);
+  npFinancialOptionPrice: async (args: Record<string, unknown>, authToken?: string): Promise<NpFinancialOptionPriceResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialOptionPriceResponse>('financial_option_price', args, authToken);
   },
 
-  npFinancialBondPrice: async (args: Record<string, unknown>): Promise<NpFinancialBondPriceResponse> => {
-    return callNpToolWithAuthFallback<NpFinancialBondPriceResponse>('financial_bond_price', args);
+  npFinancialBondPrice: async (args: Record<string, unknown>, authToken?: string): Promise<NpFinancialBondPriceResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialBondPriceResponse>('financial_bond_price', args, authToken);
   },
 
-  npFinancialTechnicalIndicators: async (args: Record<string, unknown>): Promise<NpFinancialTechnicalIndicatorsResponse> => {
-    return callNpToolWithAuthFallback<NpFinancialTechnicalIndicatorsResponse>('financial_technical_indicators', args);
+  npFinancialTechnicalIndicators: async (args: Record<string, unknown>, authToken?: string): Promise<NpFinancialTechnicalIndicatorsResponse> => {
+    return callNpToolWithAuthFallback<NpFinancialTechnicalIndicatorsResponse>('financial_technical_indicators', args, authToken);
   },
 
   // ---------------------------------------------------------------------------
@@ -1735,6 +1764,24 @@ export const api = {
 
     const textContent = getTextContent(result, 'gofr-iq', 'get_top_client_news');
     return parseToolText<ClientFeedResponse>('gofr-iq', 'get_top_client_news', textContent);
+  },
+
+  // LLM augmentation for a single (client, document) pair. Must be user-triggered.
+  whyItMattersToClient: async (
+    authToken: string,
+    clientGuid: string,
+    documentGuid: string,
+  ): Promise<WhyItMattersToClientResponse> => {
+    const client = getMcpClient('gofr-iq');
+
+    const result = await client.callTool<HealthCheckResult>('why_it_matters_to_client', {
+      client_guid: clientGuid,
+      document_guid: documentGuid,
+      auth_tokens: [authToken],
+    });
+
+    const textContent = getTextContent(result, 'gofr-iq', 'why_it_matters_to_client');
+    return parseToolText<WhyItMattersToClientResponse>('gofr-iq', 'why_it_matters_to_client', textContent);
   },
 
   // Add to portfolio

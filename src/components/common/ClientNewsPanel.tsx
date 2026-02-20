@@ -4,9 +4,9 @@ import {
   Typography,
   List,
   ListItem,
-  ListItemText,
   Skeleton,
   Alert,
+  CircularProgress,
   Box,
   Chip,
   Divider,
@@ -20,7 +20,7 @@ import { api } from '../../services/api';
 import DocumentViewDialog from './DocumentViewDialog';
 import { getIndustryLabel } from '../../types/restrictions';
 import type { ClientRestrictions } from '../../types/restrictions';
-import type { NewsArticle } from '../../types/gofrIQ';
+import type { NewsArticle, WhyItMattersToClientResponse } from '../../types/gofrIQ';
 
 interface ClientNewsPanelProps {
   clientGuid: string;
@@ -44,6 +44,14 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
   const [selectedArticleMeta, setSelectedArticleMeta] = useState<NewsArticle | null>(null);
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [showAllArticles, setShowAllArticles] = useState(false);
+
+  // On-demand LLM enrichment. Never fetch automatically.
+  const [enrichedByDocGuid, setEnrichedByDocGuid] = useState<Map<string, WhyItMattersToClientResponse>>(
+    () => new Map(),
+  );
+  const [enrichOpen, setEnrichOpen] = useState<Set<string>>(() => new Set());
+  const [enrichLoading, setEnrichLoading] = useState<Set<string>>(() => new Set());
+  const [enrichError, setEnrichError] = useState<Map<string, string>>(() => new Map());
 
   const handleDocumentClick = (docGuid: string, article: NewsArticle) => {
     setSelectedDocGuid(docGuid);
@@ -102,6 +110,62 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
     };
   }, [clientGuid, clientName, authToken, impactThreshold, showAllArticles]);
 
+  // Reset enrichment when switching client/token.
+  useEffect(() => {
+    setEnrichedByDocGuid(new Map());
+    setEnrichOpen(new Set());
+    setEnrichLoading(new Set());
+    setEnrichError(new Map());
+  }, [clientGuid, authToken]);
+
+  const requestEnrichment = async (documentGuid: string) => {
+    // Cache hit
+    if (enrichedByDocGuid.has(documentGuid)) {
+      setEnrichOpen((prev) => {
+        const next = new Set(prev);
+        next.add(documentGuid);
+        return next;
+      });
+      return;
+    }
+
+    setEnrichOpen((prev) => {
+      const next = new Set(prev);
+      next.add(documentGuid);
+      return next;
+    });
+    setEnrichError((prev) => {
+      const next = new Map(prev);
+      next.delete(documentGuid);
+      return next;
+    });
+    setEnrichLoading((prev) => {
+      const next = new Set(prev);
+      next.add(documentGuid);
+      return next;
+    });
+    try {
+      const res = await api.whyItMattersToClient(authToken, clientGuid, documentGuid);
+      setEnrichedByDocGuid((prev) => {
+        const next = new Map(prev);
+        next.set(documentGuid, res);
+        return next;
+      });
+    } catch (err) {
+      setEnrichError((prev) => {
+        const next = new Map(prev);
+        next.set(documentGuid, err instanceof Error ? err.message : 'Failed to generate explanation');
+        return next;
+      });
+    } finally {
+      setEnrichLoading((prev) => {
+        const next = new Set(prev);
+        next.delete(documentGuid);
+        return next;
+      });
+    }
+  };
+
   const getTierColor = (tier?: string): 'error' | 'warning' | 'info' | 'default' => {
     switch (tier) {
       case 'PLATINUM': return 'error';
@@ -109,6 +173,19 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
       case 'SILVER': return 'info';
       default: return 'default';
     }
+  };
+
+  /** Convert UPPER_SNAKE reason to title case: DIRECT_HOLDING -> Direct holding */
+  const humanizeReason = (reason: string): string => {
+    return reason
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/^\w/, (c) => c.toUpperCase());
+  };
+
+  /** Title-case a tier label: GOLD -> Gold */
+  const humanizeTier = (tier: string): string => {
+    return tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase();
   };
 
   const formatDate = (dateStr?: string): string => {
@@ -260,83 +337,203 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
         <List sx={{ pt: 0, maxHeight: 400, overflow: 'auto' }}>
           {articles.map((article, index) => {
             const docGuid = article.document_guid || article.guid;
+            const enriched = docGuid ? enrichedByDocGuid.get(docGuid) : undefined;
+            const isOpen = docGuid ? enrichOpen.has(docGuid) : false;
+            const isLoading = docGuid ? enrichLoading.has(docGuid) : false;
+            const localError = docGuid ? enrichError.get(docGuid) : undefined;
+            const baseWhy = article.why_it_matters_base ?? article.why_it_matters;
+            const tierLabel = article.impact_tier ? humanizeTier(article.impact_tier) : '';
+            const scoreLabel = article.impact_score != null ? ` ${article.impact_score}` : '';
             return (
               <React.Fragment key={docGuid || index}>
-                {index > 0 && <Divider />}
-                <ListItem alignItems="flex-start" sx={{ px: 0, flexDirection: 'column', alignItems: 'stretch' }}>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-                        <Chip
-                          label={article.impact_tier}
-                          color={getTierColor(article.impact_tier)}
-                          size="small"
-                          sx={{ fontWeight: 'bold' }}
-                        />
-                        <Chip
-                          label={article.impact_score}
-                          color={getTierColor(article.impact_tier)}
-                          size="small"
-                          variant="outlined"
-                        />
-                        {article.affected_instruments && article.affected_instruments.length > 0 && (
-                          <Chip
-                            label={article.affected_instruments.join(', ')}
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                          />
-                        )}
-                        <Typography variant="caption" color="text.secondary" component="span">
-                          {formatDate(article.created_at)}
-                        </Typography>
-                      </Box>
-                    }
-                    secondary={
-                      docGuid ? (
+                {index > 0 && <Divider sx={{ opacity: 0.4 }} />}
+                <ListItem
+                  sx={{
+                    px: 0,
+                    py: 1.5,
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    gap: 0.5,
+                  }}
+                >
+                  {/* Row 1: tier+score chip | instruments (bold text) | timestamp */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    {article.impact_tier && (
+                      <Chip
+                        label={`${tierLabel}${scoreLabel}`}
+                        color={getTierColor(article.impact_tier)}
+                        size="small"
+                        sx={{ fontWeight: 600, fontSize: '0.7rem', height: 22 }}
+                      />
+                    )}
+                    {article.affected_instruments && article.affected_instruments.length > 0 && (
+                      <Typography
+                        variant="body2"
+                        component="span"
+                        sx={{ fontWeight: 700, letterSpacing: '0.02em' }}
+                      >
+                        {article.affected_instruments.join(', ')}
+                      </Typography>
+                    )}
+                    <Box sx={{ flex: 1 }} />
+                    <Typography variant="caption" color="text.disabled" component="span">
+                      {formatDate(article.created_at)}
+                    </Typography>
+                  </Box>
+
+                  {/* Row 2: headline */}
+                  {docGuid ? (
+                    <Link
+                      component="button"
+                      variant="body2"
+                      onClick={() => handleDocumentClick(docGuid, article)}
+                      sx={{
+                        fontWeight: 500,
+                        textAlign: 'left',
+                        textDecoration: 'none',
+                        color: 'text.primary',
+                        cursor: 'pointer',
+                        '&:hover': { textDecoration: 'underline', color: 'primary.main' },
+                      }}
+                    >
+                      {article.title}
+                    </Link>
+                  ) : (
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {article.title}
+                    </Typography>
+                  )}
+
+                  {/* Row 3: base relevance + "Why?" toggle */}
+                  {baseWhy ? (
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {baseWhy}
+                      </Typography>
+                      {docGuid ? (
                         <Link
                           component="button"
-                          variant="body2"
-                          onClick={() => handleDocumentClick(docGuid, article)}
+                          variant="caption"
+                          onClick={() => {
+                            if (isOpen) {
+                              setEnrichOpen((prev) => {
+                                const next = new Set(prev);
+                                next.delete(docGuid);
+                                return next;
+                              });
+                            } else {
+                              void requestEnrichment(docGuid);
+                            }
+                          }}
                           sx={{
-                            fontWeight: 'medium',
-                            textAlign: 'left',
+                            color: 'secondary.main',
+                            fontWeight: 500,
                             textDecoration: 'none',
-                            cursor: 'pointer',
+                            cursor: isLoading ? 'wait' : 'pointer',
+                            whiteSpace: 'nowrap',
                             '&:hover': { textDecoration: 'underline' },
                           }}
                         >
-                          {article.title}
+                          {isOpen ? 'hide' : 'Why?'}
                         </Link>
-                      ) : (
-                        article.title
-                      )
-                    }
-                    secondaryTypographyProps={{ component: 'div', mb: 0.5 }}
-                  />
-                  {article.why_it_matters && (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontStyle: 'italic' }}>
-                      {article.why_it_matters}
-                    </Typography>
-                  )}
-                  {article.reasons && article.reasons.length > 0 && (
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.5 }}>
-                      {article.reasons.map((reason, i) => (
+                      ) : null}
+                      {isLoading ? <CircularProgress size={12} sx={{ ml: 0.5 }} /> : null}
+                    </Box>
+                  ) : docGuid ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Link
+                        component="button"
+                        variant="caption"
+                        onClick={() => {
+                          if (isOpen) {
+                            setEnrichOpen((prev) => {
+                              const next = new Set(prev);
+                              next.delete(docGuid);
+                              return next;
+                            });
+                          } else {
+                            void requestEnrichment(docGuid);
+                          }
+                        }}
+                        sx={{
+                          color: 'secondary.main',
+                          fontWeight: 500,
+                          textDecoration: 'none',
+                          cursor: isLoading ? 'wait' : 'pointer',
+                          '&:hover': { textDecoration: 'underline' },
+                        }}
+                      >
+                        {isOpen ? 'hide' : 'Why?'}
+                      </Link>
+                      {isLoading ? <CircularProgress size={12} /> : null}
+                    </Box>
+                  ) : null}
+
+                  {/* Enriched LLM content (collapsed by default) */}
+                  {docGuid && isOpen ? (
+                    <Box
+                      sx={{
+                        pl: 1.5,
+                        borderLeft: '2px solid',
+                        borderColor: 'secondary.dark',
+                        mt: 0.5,
+                      }}
+                    >
+                      {localError ? (
+                        <Alert
+                          severity="warning"
+                          sx={{ py: 0.25, px: 1 }}
+                          action={
+                            <Button size="small" onClick={() => void requestEnrichment(docGuid)} sx={{ textTransform: 'none', fontSize: '0.75rem' }}>
+                              Retry
+                            </Button>
+                          }
+                        >
+                          <Typography variant="caption">{localError}</Typography>
+                        </Alert>
+                      ) : enriched ? (
+                        <>
+                          <Typography variant="body2" sx={{ mb: 0.25 }}>
+                            {enriched.why_it_matters}
+                          </Typography>
+                          {enriched.story_summary ? (
+                            <Typography variant="caption" color="text.secondary">
+                              {enriched.story_summary}
+                            </Typography>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </Box>
+                  ) : null}
+
+                  {/* Row 4: reason tags (muted) + source */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                    {article.reasons && article.reasons.length > 0 && (
+                      article.reasons.map((reason, i) => (
                         <Chip
                           key={i}
-                          label={reason.replace(/_/g, ' ')}
+                          label={humanizeReason(reason)}
                           size="small"
                           variant="outlined"
-                          sx={{ fontSize: '0.7rem' }}
+                          sx={{
+                            fontSize: '0.65rem',
+                            height: 20,
+                            color: 'text.disabled',
+                            borderColor: 'divider',
+                          }}
                         />
-                      ))}
-                    </Box>
-                  )}
-                  {article.source_name && (
-                    <Typography variant="caption" color="text.secondary">
-                      Source: {article.source_name}
-                    </Typography>
-                  )}
+                      ))
+                    )}
+                    {article.source_name && (
+                      <Typography
+                        variant="caption"
+                        color="text.disabled"
+                        sx={{ ml: article.reasons && article.reasons.length > 0 ? 0.5 : 0 }}
+                      >
+                        {article.source_name}
+                      </Typography>
+                    )}
+                  </Box>
                 </ListItem>
               </React.Fragment>
             );
@@ -357,7 +554,7 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
             source_name: selectedArticleMeta.source_name,
             affected_instruments: selectedArticleMeta.affected_instruments,
             reasons: selectedArticleMeta.reasons,
-            why_it_matters: selectedArticleMeta.why_it_matters,
+            why_it_matters: selectedArticleMeta.why_it_matters_base ?? selectedArticleMeta.why_it_matters,
           } : undefined}
         />
       )}

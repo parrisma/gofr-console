@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -19,12 +19,14 @@ import {
 import { api } from '../services/api';
 import { logger } from '../services/logging';
 import { useGofrNpUi } from '../hooks/useGofrNpUi';
+import { useConfig } from '../hooks/useConfig';
 import type { GofrNpToolName } from '../stores/gofrNpUiStore';
 import RequestPreview from '../components/common/RequestPreview';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
 import JsonBlock from '../components/common/JsonBlock';
 import { guardNpToolArgs } from '../utils/npPayloadGuards';
+import TokenSelect from '../components/common/TokenSelect';
 
 type ToolDocParam = {
   name: string;
@@ -241,6 +243,7 @@ function hasMathResultShape(value: unknown): value is { result: unknown; shape?:
 
 export default function GofrNpTools() {
   const { state: uiState, setState: setUiState } = useGofrNpUi();
+  const { tokens } = useConfig();
 
   const [payloadJson, setPayloadJson] = useState<string>(() => {
     return uiState.perToolPayloadJson[uiState.selectedTool] ?? DEFAULT_PAYLOADS[uiState.selectedTool];
@@ -266,9 +269,30 @@ export default function GofrNpTools() {
     });
   }, []);
 
+  // Prefer a reasonable default token when available.
+  useEffect(() => {
+    if (uiState.selectedTokenIndex >= 0) return;
+    if (!tokens || tokens.length === 0) return;
+
+    const preferredIndex = Math.max(
+      0,
+      tokens.findIndex((t) => t.name === 'all') >= 0
+        ? tokens.findIndex((t) => t.name === 'all')
+        : tokens.findIndex((t) => t.name === 'admin'),
+    );
+    setUiState({ selectedTokenIndex: preferredIndex });
+  }, [setUiState, tokens, uiState.selectedTokenIndex]);
+
   const selectedDoc = TOOL_DOCS[uiState.selectedTool];
 
+  const prevSelectedToolRef = useRef<GofrNpToolName>(uiState.selectedTool);
+
   useEffect(() => {
+    // Only reset editor/output when switching tools.
+    // Saving per-tool payload JSON also updates uiState.perToolPayloadJson, and should not wipe outputs.
+    if (prevSelectedToolRef.current === uiState.selectedTool) return;
+    prevSelectedToolRef.current = uiState.selectedTool;
+
     const existing = uiState.perToolPayloadJson[uiState.selectedTool];
     const next = existing ?? DEFAULT_PAYLOADS[uiState.selectedTool];
     setPayloadJson(next);
@@ -301,6 +325,18 @@ export default function GofrNpTools() {
   const runTool = async () => {
     const tool = uiState.selectedTool;
 
+    const selectedToken =
+      uiState.selectedTokenIndex >= 0 && uiState.selectedTokenIndex < tokens.length
+        ? tokens.at(uiState.selectedTokenIndex) ?? null
+        : null;
+    const authToken = selectedToken?.token || undefined;
+
+    const toolRequiresAuth = tool !== 'ping' && tool !== 'math_list_operations';
+    if (toolRequiresAuth && !authToken) {
+      setRunErr(new Error('Auth required: select a JWT token'));
+      return;
+    }
+
     // Curve predict is in-memory and should be gated in UI session.
     if (tool === 'curve_predict' && !uiState.lastCurveFit?.model_id) {
       setRunErr(new Error('curve_predict is blocked until curve_fit succeeds (model_id is in-memory)'));
@@ -331,28 +367,28 @@ export default function GofrNpTools() {
           res = await api.npMathListOperations();
           break;
         case 'math_compute':
-          res = await api.npMathCompute(args);
+          res = await api.npMathCompute(args, authToken);
           break;
         case 'curve_fit':
-          res = await api.npCurveFit(args);
+          res = await api.npCurveFit(args, authToken);
           break;
         case 'curve_predict':
-          res = await api.npCurvePredict(args);
+          res = await api.npCurvePredict(args, authToken);
           break;
         case 'financial_pv':
-          res = await api.npFinancialPv(args);
+          res = await api.npFinancialPv(args, authToken);
           break;
         case 'financial_convert_rate':
-          res = await api.npFinancialConvertRate(args);
+          res = await api.npFinancialConvertRate(args, authToken);
           break;
         case 'financial_option_price':
-          res = await api.npFinancialOptionPrice(args);
+          res = await api.npFinancialOptionPrice(args, authToken);
           break;
         case 'financial_bond_price':
-          res = await api.npFinancialBondPrice(args);
+          res = await api.npFinancialBondPrice(args, authToken);
           break;
         case 'financial_technical_indicators':
-          res = await api.npFinancialTechnicalIndicators(args);
+          res = await api.npFinancialTechnicalIndicators(args, authToken);
           break;
       }
 
@@ -469,7 +505,7 @@ export default function GofrNpTools() {
         GOFR-NP Tools
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Select a function and run it by editing the JSON payload. No auth and no sessions.
+        Select a function and run it by editing the JSON payload. Most tools require a JWT token.
       </Typography>
 
       <Card sx={{ mb: 2 }}>
@@ -510,6 +546,16 @@ export default function GofrNpTools() {
                 <RawResponsePopupIcon title="math_list_operations raw" data={opsRes ?? opsErr ?? null} />
               </>
             ) : null}
+
+            <TokenSelect
+              label="JWT"
+              tokens={tokens}
+              value={uiState.selectedTokenIndex}
+              onChange={(idx) => setUiState({ selectedTokenIndex: idx })}
+              allowNone={true}
+              helperText={tokens.length === 0 ? 'Add a token in Operations to run auth-required tools' : undefined}
+              sx={{ ml: 'auto' }}
+            />
           </Box>
 
           {opsErr ? <ToolErrorAlert err={opsErr} fallback="math_list_operations failed" /> : null}

@@ -18,12 +18,14 @@ export interface CurveFitUiState {
 
 export interface GofrNpUiState {
   selectedTool: GofrNpToolName;
+  selectedTokenIndex: number;
   perToolPayloadJson: Partial<Record<GofrNpToolName, string>>;
   lastCurveFit: CurveFitUiState | null;
 }
 
 const defaultState: GofrNpUiState = {
   selectedTool: 'math_compute',
+  selectedTokenIndex: -1,
   perToolPayloadJson: {},
   lastCurveFit: null,
 };

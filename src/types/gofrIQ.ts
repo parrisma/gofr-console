@@ -123,7 +123,17 @@ export interface NewsArticle {
   instruments?: string[];
   affected_instruments?: string[];
   reasons?: string[];
+  why_it_matters_base?: string;
   why_it_matters?: string;
+  story_summary?: string;
+}
+
+/** Response from why_it_matters_to_client */
+export interface WhyItMattersToClientResponse {
+  client_guid: string;
+  document_guid: string;
+  why_it_matters: string;
+  story_summary: string;
 }
 
 /** Response from get_top_client_news */
