@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Paper,
   Typography,
@@ -14,7 +14,12 @@ import {
   Button,
   Switch,
   FormControlLabel,
+  Slider,
+  Select,
+  MenuItem,
+  FormControl,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material';
 import { FilterList, FilterListOff } from '@mui/icons-material';
 import { api } from '../../services/api';
 import DocumentViewDialog from './DocumentViewDialog';
@@ -44,6 +49,37 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
   const [selectedArticleMeta, setSelectedArticleMeta] = useState<NewsArticle | null>(null);
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [showAllArticles, setShowAllArticles] = useState(false);
+
+  // Alpha Engine controls
+  const [opportunityBias, setOpportunityBias] = useState(0.0);
+  const [debouncedBias, setDebouncedBias] = useState(0.0);
+  const [feedLimit, setFeedLimit] = useState(3);
+  const [timeWindowHours, setTimeWindowHours] = useState(24);
+  const biasTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounce slider changes by 400ms to avoid spamming API calls while dragging
+  const handleBiasChange = useCallback((_event: Event, value: number | number[]) => {
+    const v = typeof value === 'number' ? value : value[0];
+    setOpportunityBias(v);
+    if (biasTimerRef.current) clearTimeout(biasTimerRef.current);
+    biasTimerRef.current = setTimeout(() => setDebouncedBias(v), 400);
+  }, []);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (biasTimerRef.current) clearTimeout(biasTimerRef.current);
+    };
+  }, []);
+
+  /** Contextual label for current slider position */
+  const getBiasLabel = (bias: number): string => {
+    if (bias === 0) return 'Defense -- prioritising holdings risk';
+    if (bias < 0.5) return `Mostly defense (bias ${bias.toFixed(2)})`;
+    if (bias === 0.5) return 'Balanced';
+    if (bias < 1) return `Mostly offense (bias ${bias.toFixed(2)})`;
+    return 'Offense -- prioritising thematic opportunities';
+  };
 
   // On-demand LLM enrichment. Never fetch automatically.
   const [enrichedByDocGuid, setEnrichedByDocGuid] = useState<Map<string, WhyItMattersToClientResponse>>(
@@ -80,7 +116,10 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
       try {
         // Apply threshold filter unless "show all" is toggled
         const effectiveThreshold = showAllArticles ? 0 : (impactThreshold ?? 0);
-        const response = await api.getClientFeed(authToken, clientGuid, 3, effectiveThreshold);
+        const response = await api.getClientFeed(
+          authToken, clientGuid, feedLimit, effectiveThreshold,
+          debouncedBias, timeWindowHours,
+        );
         if (cancelled) {
           console.log(`News fetch for ${clientName} cancelled (stale)`);
           return;
@@ -108,7 +147,7 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [clientGuid, clientName, authToken, impactThreshold, showAllArticles]);
+  }, [clientGuid, clientName, authToken, impactThreshold, showAllArticles, debouncedBias, feedLimit, timeWindowHours]);
 
   // Reset enrichment when switching client/token.
   useEffect(() => {
@@ -250,6 +289,75 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
         Most relevant articles for this client based on fund type, holdings, and watchlist
       </Typography>
 
+      {/* Alpha Engine controls: bias slider + limit + time window */}
+      <Box sx={{ mb: 2 }}>
+        {/* Bias slider row */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, maxWidth: 340, mb: 1 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', minWidth: 52 }}>
+            Defense
+          </Typography>
+          <Slider
+            value={opportunityBias}
+            onChange={handleBiasChange}
+            min={0}
+            max={1}
+            step={0.05}
+            marks={[
+              { value: 0, label: '' },
+              { value: 0.5, label: '' },
+              { value: 1, label: '' },
+            ]}
+            valueLabelDisplay="auto"
+            valueLabelFormat={(v: number) => v.toFixed(2)}
+            size="small"
+            sx={{ mx: 1 }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', minWidth: 48 }}>
+            Offense
+          </Typography>
+        </Box>
+
+        {/* Limit + Time window selects */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Limit:</Typography>
+            <FormControl size="small" variant="standard">
+              <Select
+                value={feedLimit}
+                onChange={(e: SelectChangeEvent<number>) => setFeedLimit(Number(e.target.value))}
+                sx={{ fontSize: '0.75rem', minWidth: 40 }}
+              >
+                <MenuItem value={3}>3</MenuItem>
+                <MenuItem value={5}>5</MenuItem>
+                <MenuItem value={10}>10</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">Window:</Typography>
+            <FormControl size="small" variant="standard">
+              <Select
+                value={timeWindowHours}
+                onChange={(e: SelectChangeEvent<number>) => setTimeWindowHours(Number(e.target.value))}
+                sx={{ fontSize: '0.75rem', minWidth: 50 }}
+              >
+                <MenuItem value={1}>1h</MenuItem>
+                <MenuItem value={4}>4h</MenuItem>
+                <MenuItem value={12}>12h</MenuItem>
+                <MenuItem value={24}>24h</MenuItem>
+                <MenuItem value={48}>48h</MenuItem>
+                <MenuItem value={168}>1w</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </Box>
+
+        {/* Bias indicator label */}
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+          {getBiasLabel(opportunityBias)}
+        </Typography>
+      </Box>
+
       {/* Filter Transparency Alert */}
       {!showAllArticles && (impactThreshold !== undefined && impactThreshold > 0 || restrictions) && (
         <Alert 
@@ -365,6 +473,15 @@ export const ClientNewsPanel: React.FC<ClientNewsPanelProps> = ({
                         size="small"
                         sx={{ fontWeight: 600, fontSize: '0.7rem', height: 22 }}
                       />
+                    )}
+                    {article.relevance_score != null && (
+                      <Typography
+                        variant="caption"
+                        component="span"
+                        sx={{ color: 'text.secondary', fontWeight: 500, fontSize: '0.7rem' }}
+                      >
+                        {Math.round(article.relevance_score * 100)}%
+                      </Typography>
                     )}
                     {article.affected_instruments && article.affected_instruments.length > 0 && (
                       <Typography

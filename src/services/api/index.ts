@@ -1743,20 +1743,23 @@ export const api = {
     return parseToolText<DocumentResponse>('gofr-iq', 'get_document', textContent);
   },
 
-  // Get client news feed using get_top_client_news
+  // Get client news feed using get_top_client_news (Alpha Engine)
   getClientFeed: async (
     authToken: string,
     clientGuid: string,
     limit: number = 3,
-    minImpactScore: number = 0
+    minImpactScore: number = 0,
+    opportunityBias: number = 0.0,
+    timeWindowHours: number = 24,
   ): Promise<ClientFeedResponse> => {
     const client = getMcpClient('gofr-iq');
-    
+
     const result = await client.callTool<HealthCheckResult>('get_top_client_news', {
       client_guid: clientGuid,
-      limit: Math.min(limit, 3), // Cap at 3 — each article requires an LLM call server-side
-      time_window_hours: 24,
+      limit: Math.min(Math.max(limit, 1), 10),
+      time_window_hours: Math.min(Math.max(timeWindowHours, 1), 168),
       min_impact_score: minImpactScore,
+      opportunity_bias: Math.min(Math.max(opportunityBias, 0), 1),
       include_portfolio: true,
       include_watchlist: true,
       include_lateral_graph: true,
