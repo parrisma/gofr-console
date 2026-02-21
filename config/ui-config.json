@@ -116,17 +116,5 @@
         "perf": 9600
       }
     }
-  ],
-  "tokens": [
-    {
-      "name": "all",
-      "groups": "all",
-      "token": "REDACTED_TOKEN"
-    },
-    {
-      "name": "admin",
-      "groups": "admin",
-      "token": "REDACTED_TOKEN"
-    }
   ]
 }

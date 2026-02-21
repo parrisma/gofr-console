@@ -1,5 +1,6 @@
 import { Box, Button, Tooltip } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { highlightJson } from '../../utils/jsonHighlight';
 
 function toDisplayText(data: unknown): string {
   if (data == null) return '';
@@ -22,6 +23,7 @@ export default function JsonBlock({
 }) {
   if (data == null) return null;
   const text = toDisplayText(data);
+  const highlighted = highlightJson(text);
   return (
     <Box sx={{ mt: 2 }}>
       <Box display="flex" justifyContent="flex-end" mb={1}>
@@ -57,7 +59,7 @@ export default function JsonBlock({
           m: 0,
         }}
       >
-        {text}
+        {highlighted}
       </Box>
     </Box>
   );

@@ -2,6 +2,7 @@ import { Box, AppBar, Toolbar, Typography, Drawer, IconButton } from '@mui/mater
 import { useNavigate, useLocation } from 'react-router-dom';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import BuildIcon from '@mui/icons-material/Build';
+import UserBadge from './UserBadge';
 
 const drawerWidth = 60;
 
@@ -29,6 +30,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               GOFR Console
             </Typography>
           </Box>
+          <Box sx={{ flex: 1 }} />
+          <UserBadge />
         </Toolbar>
       </AppBar>
       

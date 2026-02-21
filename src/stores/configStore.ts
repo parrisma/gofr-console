@@ -122,6 +122,7 @@ class ConfigStore {
   private _listeners: Set<() => void> = new Set();
   private _loaded = false;
   private _saveDebounce: ReturnType<typeof setTimeout> | null = null;
+  private _saveTokensDebounce: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     // Load config on init
@@ -167,6 +168,33 @@ class ConfigStore {
     }
   }
 
+  // Save tokens to /api/users (debounced)
+  private saveTokens(): void {
+    if (this._saveTokensDebounce) {
+      clearTimeout(this._saveTokensDebounce);
+    }
+    this._saveTokensDebounce = setTimeout(() => {
+      this.saveTokensImmediate();
+    }, 500);
+  }
+
+  // Save tokens to /api/users immediately
+  private async saveTokensImmediate(): Promise<void> {
+    try {
+      const response = await fetch('/api/users');
+      if (!response.ok) return;
+      const data = await response.json();
+      data.tokens = this._config.tokens ?? [];
+      await fetch('/api/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    } catch {
+      console.error('Failed to save tokens');
+    }
+  }
+
   // Notify listeners of changes
   private notify(): void {
     this._listeners.forEach(listener => listener());
@@ -197,6 +225,12 @@ class ConfigStore {
 
   get tokens(): JwtToken[] {
     return this._config.tokens ?? [];
+  }
+
+  // Set tokens directly (called by authStore on login)
+  setTokens(tokens: JwtToken[]): void {
+    this._config.tokens = tokens;
+    this.notify();
   }
 
   // Set environment
@@ -248,7 +282,7 @@ class ConfigStore {
       this._config.tokens = [];
     }
     this._config.tokens.push(token);
-    this.save();
+    this.saveTokens();
     this.notify();
   }
 
@@ -261,7 +295,7 @@ class ConfigStore {
       safeIndex < this._config.tokens.length
     ) {
       this._config.tokens.splice(safeIndex, 1, token);
-      this.save();
+      this.saveTokens();
       this.notify();
     }
   }
@@ -275,7 +309,7 @@ class ConfigStore {
       safeIndex < this._config.tokens.length
     ) {
       this._config.tokens.splice(safeIndex, 1);
-      this.save();
+      this.saveTokens();
       this.notify();
     }
   }

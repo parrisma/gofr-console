@@ -15,6 +15,7 @@ import {
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
+import { formatJson } from '../utils/jsonHighlight';
 import { useConfig } from '../hooks/useConfig';
 import { useGofrPlotUi } from '../hooks/useGofrPlotUi';
 import type { JwtToken } from '../stores/configStore';
@@ -225,6 +226,7 @@ export default function GofrPlotBuilder() {
       setValidateErr(parsed.error);
       return;
     }
+    setSeriesJson(formatJson(seriesJson));
   };
 
   const runRender = async () => {

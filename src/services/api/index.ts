@@ -23,6 +23,7 @@ import type {
   WatchlistResponse,
   WatchlistUpdateResponse,
   InstrumentNewsResponse,
+  QueryDocumentsResponse,
 } from '../../types/gofrIQ';
 import type {
   AntiDetectionConfig,
@@ -1932,6 +1933,29 @@ export const api = {
       });
       return defaultResponse;
     }
+  },
+
+  /**
+   * Search the GOFR-IQ knowledge graph for documents.
+   */
+  queryDocuments: async (
+    authToken: string,
+    query: string,
+    nResults: number = 10,
+    languages?: string[],
+  ): Promise<QueryDocumentsResponse> => {
+    const client = getMcpClient('gofr-iq');
+    const args: Record<string, unknown> = {
+      query,
+      n_results: nResults,
+      auth_tokens: [authToken],
+    };
+    if (languages && languages.length > 0 && !languages.includes('all')) {
+      args['languages'] = languages;
+    }
+    const result = await client.callTool<HealthCheckResult>('query_documents', args);
+    const textContent = getTextContent(result, 'gofr-iq', 'query_documents');
+    return parseToolText('gofr-iq', 'query_documents', textContent) as QueryDocumentsResponse;
   },
 };
 

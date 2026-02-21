@@ -7,6 +7,7 @@ import {
   Button,
   Alert,
   CircularProgress,
+  Chip,
   FormControl,
   InputLabel,
   Select,
@@ -22,7 +23,212 @@ import { useConfig } from '../hooks/useConfig';
 import type { JwtToken } from '../stores/configStore';
 import TokenSelect from '../components/common/TokenSelect';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
-import type { Source, IngestResult } from '../types/gofrIQ';
+import type { Source, IngestResult, QueryDocumentsResult, QueryDocumentsResponse } from '../types/gofrIQ';
+
+/** Renders a single document search result card. */
+function SearchResultCard({ doc }: { doc: QueryDocumentsResult }) {
+  const tierColor = (tier: string) =>
+    tier === 'PLATINUM' ? 'error' as const
+      : tier === 'GOLD' ? 'warning' as const
+      : tier === 'SILVER' ? 'info' as const
+      : 'default' as const;
+
+  return (
+    <Card variant="outlined" sx={{ mb: 1, p: 1.5 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
+        <Typography variant="body2" sx={{ fontWeight: 600, flex: 1 }}>
+          {doc.title || doc.document_guid}
+        </Typography>
+        {doc.impact_tier && (
+          <Chip
+            label={`${doc.impact_tier.charAt(0)}${doc.impact_tier.slice(1).toLowerCase()}${doc.impact_score != null ? ` ${doc.impact_score}` : ''}`}
+            size="small"
+            color={tierColor(doc.impact_tier)}
+            sx={{ fontWeight: 600, fontSize: '0.7rem', height: 22 }}
+          />
+        )}
+        {doc.score != null && (
+          <Typography variant="caption" color="text.disabled">
+            score {doc.score.toFixed(2)}
+          </Typography>
+        )}
+      </Box>
+      {doc.content_snippet && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          {doc.content_snippet.length > 300
+            ? doc.content_snippet.slice(0, 300) + '...'
+            : doc.content_snippet}
+        </Typography>
+      )}
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {doc.source_name && (
+          <Typography variant="caption" color="text.disabled">
+            {doc.source_name}
+          </Typography>
+        )}
+        {doc.language && (
+          <Typography variant="caption" color="text.disabled">
+            {doc.language.toUpperCase()}
+          </Typography>
+        )}
+        {doc.created_at && (
+          <Typography variant="caption" color="text.disabled">
+            {new Date(doc.created_at).toLocaleDateString()}
+          </Typography>
+        )}
+      </Box>
+    </Card>
+  );
+}
+
+/** Query tab content -- extracted to keep GofrIQIngest complexity under the gate. */
+function QueryTab({
+  tokens,
+  selectedTokenIndex,
+  setSelectedTokenIndex,
+  selectedToken,
+}: {
+  tokens: JwtToken[];
+  selectedTokenIndex: number;
+  setSelectedTokenIndex: (v: number) => void;
+  selectedToken: JwtToken | null;
+}) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchNResults, setSearchNResults] = useState(10);
+  const [searchLanguage, setSearchLanguage] = useState('all');
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<QueryDocumentsResponse | null>(null);
+
+  const handleSearch = async () => {
+    if (!selectedToken?.token || !searchQuery.trim()) return;
+    setSearching(true);
+    setSearchError(null);
+    setSearchResults(null);
+    try {
+      const langs = searchLanguage === 'all' ? undefined : [searchLanguage];
+      const res = await api.queryDocuments(
+        selectedToken.token,
+        searchQuery.trim(),
+        searchNResults,
+        langs,
+      );
+      setSearchResults(res);
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  return (
+    <Box>
+      <Typography variant="body2" color="text.secondary" gutterBottom>
+        Search documents in the GOFR-IQ knowledge graph.
+      </Typography>
+
+      <Box sx={{ mb: 3, mt: 2 }}>
+        <TokenSelect
+          label="Token (Group)"
+          tokens={tokens}
+          value={selectedTokenIndex}
+          onChange={setSelectedTokenIndex}
+          allowNone={false}
+          noneLabel={tokens.length === 0 ? 'No tokens available' : 'Select token'}
+          disabled={tokens.length === 0}
+          fullWidth
+        />
+      </Box>
+
+      <TextField
+        fullWidth
+        label="Search Query"
+        placeholder="e.g. earnings surprises, China tech regulation"
+        size="small"
+        sx={{ mb: 2 }}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        disabled={!selectedToken}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && selectedToken?.token && searchQuery.trim()) {
+            void handleSearch();
+          }
+        }}
+      />
+
+      <Box display="flex" gap={2} mb={3}>
+        <TextField
+          label="Results"
+          type="number"
+          size="small"
+          value={searchNResults}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            if (v >= 1 && v <= 100) setSearchNResults(v);
+          }}
+          slotProps={{ htmlInput: { min: 1, max: 100 } }}
+          sx={{ width: 120 }}
+          disabled={!selectedToken}
+        />
+        <FormControl size="small" sx={{ width: 150 }}>
+          <InputLabel>Language</InputLabel>
+          <Select
+            value={searchLanguage}
+            label="Language"
+            onChange={(e) => setSearchLanguage(e.target.value)}
+            disabled={!selectedToken}
+          >
+            <MenuItem value="all">All</MenuItem>
+            <MenuItem value="en">English</MenuItem>
+            <MenuItem value="zh">Chinese</MenuItem>
+            <MenuItem value="ja">Japanese</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
+
+      <Button
+        variant="contained"
+        startIcon={searching ? <CircularProgress size={18} /> : <Search />}
+        disabled={!selectedToken || !searchQuery.trim() || searching}
+        onClick={() => void handleSearch()}
+        sx={{ mb: 2 }}
+      >
+        {searching ? 'Searching...' : 'Search Documents'}
+      </Button>
+
+      {searchError && (
+        <ToolErrorAlert
+          err={searchError}
+          fallback="search failed"
+          severity="error"
+          onClose={() => setSearchError(null)}
+        />
+      )}
+
+      {searchResults && !searchError && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+            {searchResults.total_found ?? searchResults.results.length} result(s) for &quot;{searchResults.query}&quot;
+            {searchResults.execution_time_ms != null && ` in ${searchResults.execution_time_ms.toFixed(0)}ms`}
+          </Typography>
+          {searchResults.results.length === 0 ? (
+            <Alert severity="info">No documents matched your query.</Alert>
+          ) : (
+            searchResults.results.map((doc: QueryDocumentsResult) => (
+              <SearchResultCard key={doc.document_guid} doc={doc} />
+            ))
+          )}
+        </Box>
+      )}
+
+      {!searchResults && !searchError && !searching && (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Enter a query and press Search to find documents.
+        </Alert>
+      )}
+    </Box>
+  );
+}
 
 export default function GofrIQIngest() {
   const { tokens } = useConfig();
@@ -404,72 +610,12 @@ export default function GofrIQIngest() {
           )}
 
           {activeTab === 1 && (
-            <Box>
-              {/* Query Tab Content */}
-              <Typography variant="body2" color="text.secondary" gutterBottom>
-                Search documents in the GOFR-IQ knowledge graph.
-              </Typography>
-
-              {/* Token Selection for Query */}
-              <Box sx={{ mb: 3, mt: 2 }}>
-                <TokenSelect
-                  label="Token (Group)"
-                  tokens={tokens}
-                  value={selectedTokenIndex}
-                  onChange={setSelectedTokenIndex}
-                  allowNone={false}
-                  noneLabel={tokens.length === 0 ? 'No tokens available' : 'Select token'}
-                  disabled={tokens.length === 0}
-                  fullWidth
-                />
-              </Box>
-
-              {/* Search Field */}
-              <TextField
-                fullWidth
-                label="Search Query"
-                placeholder="Enter search terms..."
-                size="small"
-                sx={{ mb: 2 }}
-                disabled={!selectedToken}
-              />
-
-              {/* Search Options */}
-              <Box display="flex" gap={2} mb={3}>
-                <TextField
-                  label="Results"
-                  type="number"
-                  size="small"
-                  defaultValue={10}
-                  sx={{ width: 120 }}
-                  disabled={!selectedToken}
-                />
-                <FormControl size="small" sx={{ width: 150 }}>
-                  <InputLabel>Language</InputLabel>
-                  <Select defaultValue="all" label="Language" disabled={!selectedToken}>
-                    <MenuItem value="all">All</MenuItem>
-                    <MenuItem value="en">English</MenuItem>
-                    <MenuItem value="es">Spanish</MenuItem>
-                    <MenuItem value="fr">French</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-
-              {/* Search Button */}
-              <Button
-                variant="contained"
-                startIcon={<Search />}
-                disabled={!selectedToken}
-                sx={{ mb: 2 }}
-              >
-                Search Documents
-              </Button>
-
-              {/* Results Placeholder */}
-              <Alert severity="info">
-                Search functionality coming soon. Results will appear here.
-              </Alert>
-            </Box>
+            <QueryTab
+              tokens={tokens}
+              selectedTokenIndex={selectedTokenIndex}
+              setSelectedTokenIndex={setSelectedTokenIndex}
+              selectedToken={selectedToken}
+            />
           )}
         </CardContent>
       </Card>

@@ -18,6 +18,7 @@ import {
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
+import { formatJson } from '../utils/jsonHighlight';
 import { useGofrNpUi } from '../hooks/useGofrNpUi';
 import { useConfig } from '../hooks/useConfig';
 import type { GofrNpToolName } from '../stores/gofrNpUiStore';
@@ -317,6 +318,7 @@ export default function GofrNpTools() {
     setValidateErr(null);
     try {
       parsePayload();
+      setPayloadJson(formatJson(payloadJson));
     } catch (e) {
       setValidateErr(e);
     }

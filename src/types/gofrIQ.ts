@@ -184,6 +184,31 @@ export interface WatchlistUpdateResponse {
   watchlist_guid?: string;
 }
 
+/** Single result from query_documents */
+export interface QueryDocumentsResult {
+  document_guid: string;
+  title?: string;
+  content_snippet?: string;
+  score?: number;
+  similarity_score?: number;
+  trust_score?: number;
+  source_guid?: string;
+  source_name?: string;
+  language?: string;
+  created_at?: string;
+  impact_score?: number;
+  impact_tier?: string;
+  event_type?: string;
+}
+
+/** Response from query_documents */
+export interface QueryDocumentsResponse {
+  query: string;
+  results: QueryDocumentsResult[];
+  total_found?: number;
+  execution_time_ms?: number;
+}
+
 /** Response from get_instrument_news */
 export interface InstrumentNewsResponse {
   ticker: string;

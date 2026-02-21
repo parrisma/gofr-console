@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowBack, MonitorHeart, Storage, FileUpload, People, Dashboard } from '@mui/icons-material';
 
 import HelpPopupIcon from '../common/HelpPopupIcon';
+import UserBadge from './UserBadge';
 
 const drawerWidth = 60;
 
@@ -134,6 +135,8 @@ export default function ServiceShell({ children, serviceName, serviceRoute, navI
           <Box sx={{ ml: 1 }}>
             <HelpPopupIcon title={`${serviceName} help`} body={helpText} />
           </Box>
+          <Box sx={{ flex: 1 }} />
+          <UserBadge />
         </Toolbar>
       </AppBar>
       

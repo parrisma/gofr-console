@@ -81,6 +81,14 @@ Review all code as senior engineer + security SME:
 | `lib/gofr-common/scripts/bootstrap_platform.sh` | Idempotent platform bootstrap (Vault, auth, services). |
 | `lib/gofr-common/scripts/manage_vault.sh` | Vault lifecycle: start, stop, status, logs, init, unseal, health. |
 
+Common auth-manager command (from gofr-console container):
+
+The gofr-console dev container does not include `uv`, so run auth-manager via a sibling `*-dev` container:
+
+```
+docker exec gofr-iq-dev bash -c "source <(./lib/gofr-common/scripts/auth_env.sh --docker) && ./lib/gofr-common/scripts/auth_manager.sh --docker groups list"
+```
+
 ## PROJECT SECTION (gofr-console)
 
 PROJECT_PURPOSE: browser UI for GOFR platform (TypeScript/React SPA).

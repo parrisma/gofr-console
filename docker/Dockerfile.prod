@@ -54,6 +54,7 @@ COPY --from=build /build/dist /usr/share/nginx/html
 # In production compose, /data is a named volume; seed it with defaults.
 RUN mkdir -p /data/config /data/logs
 COPY config/ui-config.json /data/config/ui-config.json
+COPY data/config/users.json /data/config/users.json
 
 # Create cache/tmp dirs nginx needs (runs as non-root after this)
 RUN mkdir -p /var/cache/nginx /var/run /var/log/nginx \

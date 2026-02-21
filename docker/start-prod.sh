@@ -30,7 +30,7 @@ COMPOSE_FILE="$SCRIPT_DIR/compose.prod.yml"
 # ── Defaults ──────────────────────────────────────────────────────────────
 CONSOLE_PORT="${GOFR_CONSOLE_PORT:-3100}"
 FORCE_BUILD=false
-SEED_DATA=false
+SEED_DATA=true
 ACTION="up"           # up | down | restart | status | logs
 LOG_LINES=""
 BUILD_ARGS=""
@@ -134,12 +134,18 @@ seed_data_volume() {
     info "Seeding data volume with repo defaults \u2026"
     docker run --rm \
         -v "$vol_name:/data" \
-        -v "$PROJECT_ROOT/data/config:/seed/config:ro" \
         alpine:3.20 sh -c '
             mkdir -p /data/config /data/logs
-            cp -n /seed/config/ui-config.json /data/config/ui-config.json 2>/dev/null || true
             chown -R 101:101 /data
         '
+    # Seed from the built image (no host volume mounts)
+    local tmp_ctr
+    tmp_ctr=$(docker create gofr-console-prod:latest true)
+    docker cp "$tmp_ctr:/data/config/ui-config.json" - | docker run --rm -i -v "$vol_name:/data" alpine:3.20 sh -c 'tar xf - -C /data' 2>/dev/null || true
+    docker cp "$tmp_ctr:/data/config/users.json" - | docker run --rm -i -v "$vol_name:/data" alpine:3.20 sh -c 'tar xf - -C /data' 2>/dev/null || true
+    docker rm "$tmp_ctr" >/dev/null 2>&1 || true
+    # Fix ownership
+    docker run --rm -v "$vol_name:/data" alpine:3.20 chown -R 101:101 /data
     ok "Data volume seeded (config + logs dirs)"
 }
 wait_healthy() {

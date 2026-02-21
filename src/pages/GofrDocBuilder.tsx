@@ -24,6 +24,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
+import { formatJson } from '../utils/jsonHighlight';
 import { useConfig } from '../hooks/useConfig';
 import { useGofrDocUi } from '../hooks/useGofrDocUi';
 import type { JwtToken } from '../stores/configStore';
@@ -212,7 +213,7 @@ export default function GofrDocBuilder() {
       setValidateErr(new Error(`Invalid JSON: ${parsed.error}`));
       return;
     }
-
+    setParametersJson(formatJson(parametersJson));
     setValidateRes({ is_valid: true });
   };
 

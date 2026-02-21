@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import AppShell from './components/layout/AppShell';
 import ServiceShell from './components/layout/ServiceShell';
 import GlobalErrorBoundary from './components/common/GlobalErrorBoundary';
+import RequireAuth from './components/common/RequireAuth';
+import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Operations from './pages/Operations';
 import GofrIQ from './pages/GofrIQ';
@@ -79,170 +81,172 @@ function App() {
       <RouteChangeLogger />
       <GlobalErrorBoundary>
         <Routes>
-          <Route path="/" element={<AppShell><Dashboard /></AppShell>} />
-          <Route path="/operations" element={<AppShell><Operations /></AppShell>} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<RequireAuth><AppShell><Dashboard /></AppShell></RequireAuth>} />
+          <Route path="/operations" element={<RequireAuth><AppShell><Operations /></AppShell></RequireAuth>} />
         <Route path="/gofr-iq/health" element={
-          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+          <RequireAuth><ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQ />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-iq/health-check" element={
-          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+          <RequireAuth><ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQHealthCheck />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-iq/sources" element={
-          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+          <RequireAuth><ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQSources />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-iq/clients" element={
-          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+          <RequireAuth><ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQClients />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-iq/client-360" element={
-          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+          <RequireAuth><ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <Client360View />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-iq/ingest" element={
-          <ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
+          <RequireAuth><ServiceShell serviceName="GOFR-IQ" serviceRoute="/gofr-iq">
             <GofrIQIngest />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-dig" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DIG"
             serviceRoute="/gofr-dig"
             navItems={gofrDigNavItems}
           >
             <GofrDig />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-dig/health" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DIG"
             serviceRoute="/gofr-dig"
             navItems={gofrDigNavItems}
           >
             <GofrDigHealthCheck />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-dig/sessions" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DIG"
             serviceRoute="/gofr-dig"
             navItems={gofrDigNavItems}
           >
             <GofrDigSessions />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
 
         <Route path="/gofr-doc" element={<Navigate to="/gofr-doc/sessions" replace />} />
         <Route path="/gofr-doc/health" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DOC"
             serviceRoute="/gofr-doc"
             navItems={gofrDocNavItems}
           >
             <GofrDocHealthCheck />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-doc/discovery" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DOC"
             serviceRoute="/gofr-doc"
             navItems={gofrDocNavItems}
           >
             <GofrDocDiscovery />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-doc/sessions" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DOC"
             serviceRoute="/gofr-doc"
             navItems={gofrDocNavItems}
           >
             <GofrDocSessions />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-doc/builder" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DOC"
             serviceRoute="/gofr-doc"
             navItems={gofrDocNavItems}
           >
             <GofrDocBuilder />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-doc/render" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-DOC"
             serviceRoute="/gofr-doc"
             navItems={gofrDocNavItems}
           >
             <GofrDocRenderProxy />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
 
         <Route path="/gofr-plot" element={<Navigate to="/gofr-plot/health" replace />} />
         <Route path="/gofr-plot/health" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-PLOT"
             serviceRoute="/gofr-plot"
             navItems={gofrPlotNavItems}
           >
             <GofrPlotHealthCheck />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-plot/discovery" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-PLOT"
             serviceRoute="/gofr-plot"
             navItems={gofrPlotNavItems}
           >
             <GofrPlotDiscovery />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-plot/sessions" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-PLOT"
             serviceRoute="/gofr-plot"
             navItems={gofrPlotNavItems}
           >
             <GofrPlotSessions />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-plot/builder" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-PLOT"
             serviceRoute="/gofr-plot"
             navItems={gofrPlotNavItems}
           >
             <GofrPlotBuilder />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
 
         <Route path="/gofr-np" element={<Navigate to="/gofr-np/health" replace />} />
         <Route path="/gofr-np/health" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-NP"
             serviceRoute="/gofr-np"
             navItems={gofrNpNavItems}
           >
             <GofrNpHealthCheck />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
         <Route path="/gofr-np/tools" element={
-          <ServiceShell
+          <RequireAuth><ServiceShell
             serviceName="GOFR-NP"
             serviceRoute="/gofr-np"
             navItems={gofrNpNavItems}
           >
             <GofrNpTools />
-          </ServiceShell>
+          </ServiceShell></RequireAuth>
         } />
+        <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </GlobalErrorBoundary>
     </BrowserRouter>
