@@ -28,9 +28,6 @@ logs/
 data/
 !data/.gitkeep
 !data/config/
-data/config/*
-!data/config/.gitkeep
-!data/config/ui-config.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

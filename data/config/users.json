@@ -1,0 +1,33 @@
+{
+    "users": [
+        {
+            "username": "admin",
+            "displayName": "Admin User",
+            "userType": "administrator",
+            "password": "password",
+            "desk_name": "Logistics Desk",
+            "author": "Richard Head",
+            "contact_email": "richard.head@imaginarycapital.com",
+            "contact_phone": "+852 1234 5678",
+            "bloomberg_handle": "RHEAD<GO>"
+        },
+        {
+            "username": "bmartin",
+            "displayName": "Bob Martin",
+            "userType": "sales-trader",
+            "password": "password",
+            "desk_name": "APAC Equity Sales Desk",
+            "author": "Bob Martin, Sales Strategist",
+            "contact_email": "bob.martin@imaginarycapital.com",
+            "contact_phone": "+852 1234 5678",
+            "bloomberg_handle": "IMCAP<GO>"
+        }
+    ],
+    "tokens": [
+        {
+            "name": "sim",
+            "groups": "sim",
+            "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI2YWVmOTdhZS1iYzdlLTQ3OGItOTE3Zi01NmY2NDFjZGRjYTYiLCJncm91cHMiOlsiZ3JvdXAtc2ltdWxhdGlvbiJdLCJpYXQiOjE3NzE2MzUyODUsImV4cCI6MTc3NDIyNzI4NSwibmJmIjoxNzcxNjM1Mjg1LCJhdWQiOiJnb2ZyLWFwaSJ9.F6cU66pv60c-lMUsKv4GofksNzJPt6kksGcizTkH2h4"
+        }
+    ]
+}
