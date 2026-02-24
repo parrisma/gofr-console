@@ -10,6 +10,11 @@ export interface AuthUser {
   username: string;
   displayName: string;
   userType: string;
+  deskName: string;
+  author: string;
+  contactEmail: string;
+  contactPhone: string;
+  bloombergHandle: string;
 }
 
 interface UsersFileUser {
@@ -17,6 +22,11 @@ interface UsersFileUser {
   displayName: string;
   userType: string;
   password: string;
+  desk_name: string;
+  author: string;
+  contact_email: string;
+  contact_phone: string;
+  bloomberg_handle: string;
 }
 
 interface UsersFile {
@@ -53,6 +63,11 @@ class AuthStore {
         username: found.username,
         displayName: found.displayName,
         userType: found.userType,
+        deskName: found.desk_name ?? '',
+        author: found.author ?? '',
+        contactEmail: found.contact_email ?? '',
+        contactPhone: found.contact_phone ?? '',
+        bloombergHandle: found.bloomberg_handle ?? '',
       };
       // Load shared tokens into configStore
       configStore.setTokens(data.tokens ?? []);
