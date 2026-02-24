@@ -26,8 +26,9 @@ import { api } from '../services/api';
 import { logger } from '../services/logging';
 import { formatJson } from '../utils/jsonHighlight';
 import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import { useGofrDocUi } from '../hooks/useGofrDocUi';
-import type { JwtToken } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 import RequestPreview from '../components/common/RequestPreview';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import TokenSelect from '../components/common/TokenSelect';
@@ -128,7 +129,8 @@ function isSafeRelativeImagePath(path: string): boolean {
 }
 
 export default function GofrDocBuilder() {
-  const { tokens, environment, mcpServices } = useConfig();
+  const { environment, mcpServices } = useConfig();
+  const { tokens } = useTokens();
   const { state: uiState, setState: setUiState } = useGofrDocUi();
 
   const selectedToken: JwtToken | null = useMemo(() => {

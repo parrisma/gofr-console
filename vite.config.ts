@@ -2,6 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { uiConfigPlugin } from "./vite/ui-config-plugin";
 import { execSync } from "node:child_process";
+import fs from "node:fs";
+import { parseUiConfig } from "./src/types/uiConfig";
 
 const disableHmr = process.env.GOFR_DISABLE_HMR === "1" || process.env.VITE_DISABLE_HMR === "1";
 
@@ -17,18 +19,19 @@ function gitBuildInfo() {
 }
 const build = gitBuildInfo();
 
-// MCP Service proxy configuration
+// MCP Service proxy configuration -- derived from the SSOT JSON.
 // Note: These use production ports by default. The console's Operations page
 // allows switching between dev/prod environments, but since Vite proxy is static,
 // we proxy to the prod containers. For dev environment, ensure the dev containers
 // are running on the expected hostnames.
-const mcpServices = [
-  { name: "gofr-iq", host: "gofr-iq-mcp", port: 8080 },
-  { name: "gofr-doc", host: "gofr-doc-mcp", port: 8040 },
-  { name: "gofr-plot", host: "gofr-plot-mcp", port: 8050 },
-  { name: "gofr-np", host: "gofr-np-mcp", port: 8060 },
-  { name: "gofr-dig", host: "gofr-dig-mcp", port: 8070 },
-];
+const rawConfig = JSON.parse(fs.readFileSync('data/config/ui-config.json', 'utf-8'));
+const uiConfig = parseUiConfig(rawConfig);
+
+const mcpServices = uiConfig.mcpServices.map(s => ({
+  name: s.name,
+  host: s.containerHostname,
+  port: s.ports.prod.mcp,
+}));
 
 // Build proxy config for all MCP services
 const proxyConfig: Record<string, { target: string; changeOrigin: boolean; rewrite: (path: string) => string; followRedirects: boolean }> = {};

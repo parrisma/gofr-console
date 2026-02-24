@@ -19,8 +19,8 @@ import {
 import { CloudUpload, ContentPaste, CheckCircle, Search } from '@mui/icons-material';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../services/api';
-import { useConfig } from '../hooks/useConfig';
-import type { JwtToken } from '../stores/configStore';
+import { useTokens } from '../hooks/useTokens';
+import type { JwtToken } from '../types/uiConfig';
 import TokenSelect from '../components/common/TokenSelect';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type { Source, IngestResult, QueryDocumentsResult, QueryDocumentsResponse } from '../types/gofrIQ';
@@ -231,7 +231,7 @@ function QueryTab({
 }
 
 export default function GofrIQIngest() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tab state

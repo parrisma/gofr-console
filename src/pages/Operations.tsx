@@ -41,7 +41,9 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 import { useConfig } from '../hooks/useConfig';
-import type { Environment, ServicePorts, JwtToken } from '../stores/configStore';
+import { useTokens } from '../hooks/useTokens';
+import type { Environment, ServicePorts } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 
 interface EditState {
   serviceName: string;
@@ -64,14 +66,17 @@ export default function Operations() {
     environment,
     mcpServices,
     infraServices,
-    tokens,
     setEnvironment,
     updateMcpServicePorts,
     resetToDefaults,
+  } = useConfig();
+
+  const {
+    tokens,
     addToken,
     updateToken,
     deleteToken,
-  } = useConfig();
+  } = useTokens();
 
   const [editState, setEditState] = useState<EditState | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -395,18 +400,7 @@ export default function Operations() {
               <TableHead>
                 <TableRow>
                   <TableCell><strong>Service</strong></TableCell>
-                  <TableCell align="center">
-                    <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
-                      <Business fontSize="small" />
-                      Production
-                    </Box>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Box display="flex" alignItems="center" justifyContent="center" gap={1}>
-                      <Science fontSize="small" />
-                      Development
-                    </Box>
-                  </TableCell>
+                  <TableCell align="center"><strong>Ports</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -426,28 +420,17 @@ export default function Operations() {
                       </Box>
                     </TableCell>
                     <TableCell align="center">
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontFamily: 'monospace',
-                          color: environment === 'prod' ? 'primary.main' : 'text.secondary',
-                          fontWeight: environment === 'prod' ? 'bold' : 'normal',
-                        }}
-                      >
-                        {service.ports.prod}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontFamily: 'monospace',
-                          color: environment === 'dev' ? 'primary.main' : 'text.secondary',
-                          fontWeight: environment === 'dev' ? 'bold' : 'normal',
-                        }}
-                      >
-                        {service.ports.dev}
-                      </Typography>
+                      <Box display="flex" gap={1} justifyContent="center" flexWrap="wrap">
+                        {Object.entries(service.ports).map(([key, port]) => (
+                          <Chip
+                            key={key}
+                            label={`${key}: ${port}`}
+                            size="small"
+                            variant="outlined"
+                            sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+                          />
+                        ))}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}

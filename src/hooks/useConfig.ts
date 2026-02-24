@@ -1,7 +1,7 @@
 // React hook for config store
 import { useSyncExternalStore, useCallback } from 'react';
 import { configStore } from '../stores/configStore';
-import type { Environment, ServicePorts, JwtToken } from '../stores/configStore';
+import type { Environment, ServicePorts } from '../stores/configStore';
 
 export function useConfig() {
   const environment = useSyncExternalStore(
@@ -17,11 +17,6 @@ export function useConfig() {
   const infraServices = useSyncExternalStore(
     (callback) => configStore.subscribe(callback),
     () => configStore.infraServices
-  );
-
-  const tokens = useSyncExternalStore(
-    (callback) => configStore.subscribe(callback),
-    () => configStore.tokens
   );
 
   const setEnvironment = useCallback((env: Environment) => {
@@ -43,29 +38,13 @@ export function useConfig() {
     return configStore.getMcpPort(serviceName);
   }, []);
 
-  const addToken = useCallback((token: JwtToken) => {
-    configStore.addToken(token);
-  }, []);
-
-  const updateToken = useCallback((index: number, token: JwtToken) => {
-    configStore.updateToken(index, token);
-  }, []);
-
-  const deleteToken = useCallback((index: number) => {
-    configStore.deleteToken(index);
-  }, []);
-
   return {
     environment,
     mcpServices,
     infraServices,
-    tokens,
     setEnvironment,
     updateMcpServicePorts,
     resetToDefaults,
     getMcpPort,
-    addToken,
-    updateToken,
-    deleteToken,
   };
 }

@@ -24,10 +24,10 @@ import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
-import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import { useGofrDocUi } from '../hooks/useGofrDocUi';
 import { useNavigate } from 'react-router-dom';
-import type { JwtToken } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 import type {
   DocCreateSessionResponse,
   DocListActiveSessionsResponse,
@@ -129,7 +129,7 @@ function HelpPopup({
 }
 
 export default function GofrDocSessions() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
   const { state: uiState, setState: setUiState } = useGofrDocUi();
   const navigate = useNavigate();
 

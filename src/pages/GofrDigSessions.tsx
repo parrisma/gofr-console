@@ -21,9 +21,9 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import { api } from '../services/api';
-import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import { logger } from '../services/logging';
-import type { JwtToken } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 import TokenSelect from '../components/common/TokenSelect';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type {
@@ -54,7 +54,7 @@ function formatToolError(tool: string, err: unknown, fallback: string): string {
 }
 
 export default function GofrDigSessions() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
 
   useEffect(() => {
     logger.info({

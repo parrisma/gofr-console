@@ -18,9 +18,9 @@ import {
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
-import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import { useGofrPlotUi } from '../hooks/useGofrPlotUi';
-import type { JwtToken } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 import type { PlotGetImageResponse, PlotListImagesResponse } from '../types/gofrDoc';
 import RequestPreview from '../components/common/RequestPreview';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
@@ -45,7 +45,7 @@ function downloadBlob(bytes: Uint8Array, filename: string, contentType: string):
 }
 
 export default function GofrPlotSessions() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
   const { state: uiState, setState: setUiState } = useGofrPlotUi();
 
   const selectedToken: JwtToken | null = useMemo(() => {

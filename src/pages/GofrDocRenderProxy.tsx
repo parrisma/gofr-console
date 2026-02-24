@@ -23,9 +23,9 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { api } from '../services/api';
 import { logger } from '../services/logging';
-import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import { useGofrDocUi } from '../hooks/useGofrDocUi';
-import type { JwtToken } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 import RequestPreview from '../components/common/RequestPreview';
 import JsonBlock from '../components/common/JsonBlock';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
@@ -65,7 +65,7 @@ function downloadText(text: string, filename: string, contentType: string): void
 }
 
 export default function GofrDocRenderProxy() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
   const { state: uiState, setState: setUiState } = useGofrDocUi();
 
   const selectedToken: JwtToken | null = useMemo(() => {

@@ -1,8 +1,8 @@
 // Authentication store for GOFR Console
 // Backed by data/config/users.json (demo-only, replaced by Keycloak later)
 
-import { configStore } from './configStore';
-import type { JwtToken } from './configStore';
+import { tokenStore } from './tokenStore';
+import type { JwtToken } from '../types/uiConfig';
 
 export type UserType = 'Sales Trader' | 'Trader' | 'Analyst' | 'Logistics';
 
@@ -69,8 +69,8 @@ class AuthStore {
         contactPhone: found.contact_phone ?? '',
         bloombergHandle: found.bloomberg_handle ?? '',
       };
-      // Load shared tokens into configStore
-      configStore.setTokens(data.tokens ?? []);
+      // Load shared tokens into tokenStore
+      tokenStore.setTokens(data.tokens ?? []);
       this.notify();
       return true;
     } catch {
@@ -80,7 +80,7 @@ class AuthStore {
 
   logout(): void {
     this._user = null;
-    configStore.setTokens([]);
+    tokenStore.setTokens([]);
     this.notify();
   }
 

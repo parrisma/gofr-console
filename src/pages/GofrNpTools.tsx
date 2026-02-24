@@ -20,7 +20,7 @@ import { api } from '../services/api';
 import { logger } from '../services/logging';
 import { formatJson } from '../utils/jsonHighlight';
 import { useGofrNpUi } from '../hooks/useGofrNpUi';
-import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import type { GofrNpToolName } from '../stores/gofrNpUiStore';
 import RequestPreview from '../components/common/RequestPreview';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
@@ -244,7 +244,7 @@ function hasMathResultShape(value: unknown): value is { result: unknown; shape?:
 
 export default function GofrNpTools() {
   const { state: uiState, setState: setUiState } = useGofrNpUi();
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
 
   const [payloadJson, setPayloadJson] = useState<string>(() => {
     return uiState.perToolPayloadJson[uiState.selectedTool] ?? DEFAULT_PAYLOADS[uiState.selectedTool];

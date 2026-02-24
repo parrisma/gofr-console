@@ -23,7 +23,7 @@ RUN pnpm install --frozen-lockfile --prod=false
 # Copy source & config
 COPY tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts ./
 COPY index.html ./
-COPY config/ config/
+COPY data/config/ data/config/
 COPY vite/ vite/
 COPY src/ src/
 COPY public/ public/
@@ -53,7 +53,7 @@ COPY --from=build /build/dist /usr/share/nginx/html
 # Runtime config — can be overridden via volume mount at deploy time
 # In production compose, /data is a named volume; seed it with defaults.
 RUN mkdir -p /data/config /data/logs
-COPY config/ui-config.json /data/config/ui-config.json
+COPY data/config/ui-config.json /data/config/ui-config.json
 COPY data/config/users.json /data/config/users.json
 
 # Create cache/tmp dirs nginx needs (runs as non-root after this)

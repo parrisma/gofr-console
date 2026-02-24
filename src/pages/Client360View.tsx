@@ -24,8 +24,8 @@ import { WatchlistPanel } from '../components/common/WatchlistPanel';
 import { ClientNewsPanel } from '../components/common/ClientNewsPanel';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import { api } from '../services/api';
-import { useConfig } from '../hooks/useConfig';
-import type { JwtToken } from '../stores/configStore';
+import { useTokens } from '../hooks/useTokens';
+import type { JwtToken } from '../types/uiConfig';
 import type { ClientProfile as ClientProfileType, ClientProfileUpdate, MandateType, Horizon, AlertFrequency } from '../types/clientProfile';
 import type { ClientSummary, ProfileScoreResponse } from '../types/gofrIQ';
 
@@ -63,7 +63,7 @@ function mapProfileScore(response: ProfileScoreResponse): ProfileScore | null {
 }
 
 export default function Client360View() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
 
   const tokenSelectRef = useRef<HTMLInputElement | null>(null);
   const clientListRef = useRef<HTMLDivElement | null>(null);

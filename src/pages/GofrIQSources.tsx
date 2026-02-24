@@ -12,12 +12,12 @@ import {
 import { Search, Storage, ShowChart } from '@mui/icons-material';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
-import { useConfig } from '../hooks/useConfig';
-import type { JwtToken } from '../stores/configStore';
+import { useTokens } from '../hooks/useTokens';
+import type { JwtToken } from '../types/uiConfig';
 import type { Source, Instrument } from '../types/gofrIQ';
 
 export default function GofrIQSources() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
 
   // Sources state
   const [sources, setSources] = useState<Source[]>([]);

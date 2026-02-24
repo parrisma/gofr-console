@@ -2,6 +2,7 @@
 // MCP Streamable HTTP client for GOFR services
 
 import { configStore } from '../../stores/configStore';
+import { tokenStore } from '../../stores/tokenStore';
 import type { ClientRestrictions } from '../../types/restrictions';
 import { ApiError, defaultRecoveryHint } from './errors';
 import { logger } from '../logging';
@@ -331,7 +332,7 @@ function extractNpErrorInfo(data: unknown): { error: string; detail?: string; re
 }
 
 function getNpAuthTokenFromConfig(): string | undefined {
-  const tokens = configStore.tokens;
+  const tokens = tokenStore.tokens;
   if (!tokens || tokens.length === 0) return undefined;
 
   const preferred =

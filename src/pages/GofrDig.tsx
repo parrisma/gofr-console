@@ -31,9 +31,9 @@ import {
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
-import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import { logger } from '../services/logging';
-import type { JwtToken } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 import TokenSelect from '../components/common/TokenSelect';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import RawResponsePopupIcon from '../components/common/RawResponsePopupIcon';
@@ -96,7 +96,7 @@ function formatToolError(tool: string, err: unknown, fallback: string): string {
 }
 
 export default function GofrDig() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
 
   const tokenSelectRef = useRef<HTMLInputElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);

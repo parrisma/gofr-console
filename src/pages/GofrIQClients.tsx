@@ -23,8 +23,8 @@ import {
 import { Search, People, ArrowBack, Person } from '@mui/icons-material';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { api } from '../services/api';
-import { useConfig } from '../hooks/useConfig';
-import type { JwtToken } from '../stores/configStore';
+import { useTokens } from '../hooks/useTokens';
+import type { JwtToken } from '../types/uiConfig';
 import TokenSelect from '../components/common/TokenSelect';
 import ToolErrorAlert from '../components/common/ToolErrorAlert';
 import type { ClientSummary, ClientProfileResponse } from '../types/gofrIQ';
@@ -73,7 +73,7 @@ function flattenProfileResponse(
 }
 
 export default function GofrIQClients() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
 
   // Tab state
   const [activeTab, setActiveTab] = useState(0);

@@ -99,6 +99,22 @@
       }
     },
     {
+      "name": "vault",
+      "displayName": "Vault",
+      "containerHostname": "gofr-vault",
+      "ports": {
+        "http": 8201
+      }
+    },
+    {
+      "name": "chromadb",
+      "displayName": "ChromaDB",
+      "containerHostname": "gofr-chromadb",
+      "ports": {
+        "http": 8000
+      }
+    },
+    {
       "name": "keycloak",
       "displayName": "Keycloak",
       "containerHostname": "gofr-keycloak",

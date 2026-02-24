@@ -1,7 +1,7 @@
 import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
-import { useConfig } from '../../hooks/useConfig';
+import { useTokens } from '../../hooks/useTokens';
 import { useGofrDocUi } from '../../hooks/useGofrDocUi';
 
 function CopyChip({ label, value }: { label: string; value: string }) {
@@ -31,7 +31,7 @@ function CopyChip({ label, value }: { label: string; value: string }) {
 }
 
 export default function GofrDocContextStrip() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
   const { state: uiState } = useGofrDocUi();
 
   const selectedToken =

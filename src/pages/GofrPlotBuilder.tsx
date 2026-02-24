@@ -16,9 +16,9 @@ import {
 import { api } from '../services/api';
 import { logger } from '../services/logging';
 import { formatJson } from '../utils/jsonHighlight';
-import { useConfig } from '../hooks/useConfig';
+import { useTokens } from '../hooks/useTokens';
 import { useGofrPlotUi } from '../hooks/useGofrPlotUi';
-import type { JwtToken } from '../stores/configStore';
+import type { JwtToken } from '../types/uiConfig';
 import type {
   PlotListHandlersResponse,
   PlotListThemesResponse,
@@ -69,7 +69,7 @@ const DEFAULT_SERIES_JSON = JSON.stringify(
 );
 
 export default function GofrPlotBuilder() {
-  const { tokens } = useConfig();
+  const { tokens } = useTokens();
   const { state: uiState, setState: setUiState } = useGofrPlotUi();
 
   const selectedToken: JwtToken | null = useMemo(() => {

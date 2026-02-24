@@ -11,7 +11,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 import type { Ref } from 'react';
 
-import type { JwtToken } from '../../stores/configStore';
+import type { JwtToken } from '../../types/uiConfig';
 
 export default function TokenSelect({
   label = 'Token',
