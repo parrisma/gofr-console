@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type ProxyOptions } from "vite";
 import react from "@vitejs/plugin-react";
 import { uiConfigPlugin } from "./vite/ui-config-plugin";
 import { execSync } from "node:child_process";
@@ -34,7 +34,7 @@ const mcpServices = uiConfig.mcpServices.map(s => ({
 }));
 
 // Build proxy config for all MCP services
-const proxyConfig: Record<string, { target: string; changeOrigin: boolean; rewrite: (path: string) => string; followRedirects: boolean }> = {};
+const proxyConfig: Record<string, ProxyOptions> = {};
 
 // gofr-doc stock images are served by the web port/container, not the MCP port
 proxyConfig['/api/gofr-doc/images'] = {
@@ -53,12 +53,13 @@ proxyConfig['/api/gofr-doc/proxy'] = {
 };
 
 for (const { name, host, port } of mcpServices) {
-  proxyConfig[`/api/${name}`] = {
+  const entry: ProxyOptions = {
     target: `http://${host}:${port}`,
     changeOrigin: true,
     followRedirects: true,
     rewrite: (path: string) => path.slice(`/api/${name}`.length),
   };
+  proxyConfig[`/api/${name}`] = entry;
 }
 
 proxyConfig['/api/gofr-seq'] = {

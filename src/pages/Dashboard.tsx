@@ -3,6 +3,15 @@ import { Box, Button, Card, CardContent, Typography, Grid } from '@mui/material'
 import { CheckCircle, ErrorOutline, HourglassEmpty } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import {
+  agentHttpHealth,
+  agentHttpPing,
+  agentPing,
+  isAgentHttpHealthRouteMissing,
+  mapAgentErrorToConnectionState,
+} from '../services/gofrAgent';
+import { useTokens } from '../hooks/useTokens';
+import type { JwtToken } from '../types/uiConfig';
 
 interface HealthStatus {
   status: string;
@@ -14,7 +23,7 @@ interface HealthStatus {
   timestamp: string;
 }
 
-type ModuleStatus = 'checking' | 'online' | 'offline';
+type ModuleStatus = 'checking' | 'online' | 'degraded' | 'unhealthy' | 'offline' | 'needs-token' | 'unauthorized';
 
 const MODULES_TO_PING: Array<{ module: string; serviceToPing: string }> = [
   { module: 'GOFR-IQ', serviceToPing: 'gofr-iq' },
@@ -25,14 +34,25 @@ const MODULES_TO_PING: Array<{ module: string; serviceToPing: string }> = [
   { module: 'GOFR-NP', serviceToPing: 'gofr-np' },
 ];
 
+const MODULE_NAMES = [...MODULES_TO_PING.map((m) => m.module), 'GOFR-Agent'];
+
+function preferredAgentToken(tokens: JwtToken[]): string | undefined {
+  return (
+    tokens.find((token) => token.name === 'all' && token.token)?.token ??
+    tokens.find((token) => token.name === 'admin' && token.token)?.token ??
+    tokens.find((token) => token.token)?.token
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { tokens } = useTokens();
   const [health, setHealth] = useState<HealthStatus | null>(null);
 
   const [moduleStatus, setModuleStatus] = useState<Record<string, ModuleStatus>>(() => {
-    const initial: Record<string, ModuleStatus> = {};
-    for (const m of MODULES_TO_PING) initial[m.module] = 'checking';
-    return initial;
+    return Object.fromEntries(
+      MODULE_NAMES.map((moduleName) => [moduleName, 'checking' as ModuleStatus]),
+    ) as Record<string, ModuleStatus>;
   });
 
   useEffect(() => {
@@ -76,6 +96,58 @@ export default function Dashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(async () => {
+      const token = preferredAgentToken(tokens);
+      let statusFromHealth: ModuleStatus = 'online';
+      try {
+        await agentHttpPing();
+      } catch (err) {
+        if (!isAgentHttpHealthRouteMissing(err)) {
+          if (!cancelled) setModuleStatus((prev) => ({ ...prev, 'GOFR-Agent': 'offline' }));
+          return;
+        }
+      }
+
+      try {
+        const health = await agentHttpHealth();
+        if (health.status === 'unhealthy') {
+          if (!cancelled) setModuleStatus((prev) => ({ ...prev, 'GOFR-Agent': 'unhealthy' }));
+          return;
+        }
+        statusFromHealth = health.status === 'degraded' ? 'degraded' : 'online';
+      } catch (err) {
+        if (!isAgentHttpHealthRouteMissing(err)) {
+          if (!cancelled) setModuleStatus((prev) => ({ ...prev, 'GOFR-Agent': 'offline' }));
+          return;
+        }
+      }
+
+      if (!token) {
+        if (!cancelled) setModuleStatus((prev) => ({ ...prev, 'GOFR-Agent': 'needs-token' }));
+        return;
+      }
+
+      if (!cancelled) setModuleStatus((prev) => ({ ...prev, 'GOFR-Agent': 'checking' }));
+      try {
+        await agentPing(token);
+        if (!cancelled) setModuleStatus((prev) => ({ ...prev, 'GOFR-Agent': statusFromHealth }));
+      } catch (err) {
+        if (cancelled) return;
+        const mapped = mapAgentErrorToConnectionState(err);
+        setModuleStatus((prev) => ({
+          ...prev,
+          'GOFR-Agent': mapped.status === 'unauthorized' ? 'unauthorized' : 'offline',
+        }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tokens]);
+
   const services = [
     {
       name: 'GOFR-IQ',
@@ -117,17 +189,32 @@ export default function Dashboard() {
       nextAction: 'Open NP Tools',
       nextRoute: '/gofr-np/tools',
     },
+    {
+      name: 'GOFR-Agent',
+      label: 'Reasoning Agent',
+      status: moduleStatus['GOFR-Agent'] ?? 'checking',
+      route: '/gofr-agent',
+      nextAction: 'Ask a question',
+      nextRoute: '/gofr-agent',
+    },
   ];
 
   const statusLabel = (s: unknown): string => {
     if (s === 'online') return 'Online';
+    if (s === 'degraded') return 'Degraded';
+    if (s === 'unhealthy') return 'Unhealthy';
     if (s === 'offline') return 'Offline';
+    if (s === 'needs-token') return 'Needs token';
+    if (s === 'unauthorized') return 'Unauthorized';
     return 'Checking';
   };
 
   const statusIcon = (s: unknown) => {
     if (s === 'online') return <CheckCircle color="success" />;
+    if (s === 'degraded') return <ErrorOutline color="warning" />;
+    if (s === 'unhealthy') return <ErrorOutline color="error" />;
     if (s === 'offline') return <ErrorOutline color="error" />;
+    if (s === 'needs-token' || s === 'unauthorized') return <ErrorOutline color="warning" />;
     return <HourglassEmpty color="disabled" />;
   };
 

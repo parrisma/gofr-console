@@ -71,6 +71,23 @@
       }
     },
     {
+      "name": "gofr-agent",
+      "displayName": "GOFR-Agent",
+      "containerHostname": "gofr-agent-dev",
+      "ports": {
+        "prod": {
+          "mcp": 8090,
+          "mcpo": 8091,
+          "web": 8092
+        },
+        "dev": {
+          "mcp": 8090,
+          "mcpo": 8091,
+          "web": 8092
+        }
+      }
+    },
+    {
       "name": "gofr-dig",
       "displayName": "GOFR-DIG",
       "containerHostname": "gofr-dig-mcp",

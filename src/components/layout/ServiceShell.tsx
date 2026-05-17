@@ -86,6 +86,18 @@ export default function ServiceShell({ children, serviceName, serviceRoute, navI
         'Tip: curve_fit model_id is in-memory; run curve_predict right after curve_fit.',
       ];
     }
+    if (serviceName === 'GOFR-Agent') {
+      return [
+        'GOFR-Agent quick start',
+        '',
+        '1) Select a token',
+        '2) Ask a question',
+        '3) Watch the run trace while tools execute',
+        '4) Inspect provenance and follow up in the same session',
+        '',
+        'Tip: If the connection is misconfigured, verify the GOFR-Agent allowed Host header for the Vite proxy target.',
+      ];
+    }
     return ['Help is not available for this service yet.'];
   })();
 

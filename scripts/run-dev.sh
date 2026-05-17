@@ -108,6 +108,7 @@ RUN_ARGS=(
     -v "$PROJECT_ROOT/../gofr-doc:/home/gofr/devroot/gofr-doc:ro"
     -v "$PROJECT_ROOT/../gofr-np:/home/gofr/devroot/gofr-np:ro"
     -v "$PROJECT_ROOT/../gofr-iq:/home/gofr/devroot/gofr-iq:ro"
+    -v "$PROJECT_ROOT/../gofr-agent:/home/gofr/devroot/gofr-agent:ro"
     -v /var/run/docker.sock:/var/run/docker.sock:rw
     --group-add "${DOCKER_SOCK_GID}"
     -e NODE_ENV=development

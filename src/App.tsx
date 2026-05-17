@@ -27,7 +27,9 @@ import GofrPlotSessions from './pages/GofrPlotSessions';
 import GofrPlotBuilder from './pages/GofrPlotBuilder';
 import GofrNpHealthCheck from './pages/GofrNpHealthCheck';
 import GofrNpTools from './pages/GofrNpTools';
-import { MonitorHeart, Search, Storage, Build, Description } from '@mui/icons-material';
+import GofrAgent from './pages/GofrAgent';
+import GofrAgentHealthCheck from './pages/GofrAgentHealthCheck';
+import { MonitorHeart, Search, Storage, Build, Description, Chat } from '@mui/icons-material';
 import { logger } from './services/logging';
 
 function RouteChangeLogger() {
@@ -74,6 +76,11 @@ function App() {
   const gofrNpNavItems = [
     { path: '/gofr-np/health', icon: <MonitorHeart />, label: 'Health' },
     { path: '/gofr-np/tools', icon: <Build />, label: 'Tools' },
+  ];
+
+  const gofrAgentNavItems = [
+    { path: '/gofr-agent/health', icon: <MonitorHeart />, label: 'Health' },
+    { path: '/gofr-agent', icon: <Chat />, label: 'Chat' },
   ];
 
   return (
@@ -246,6 +253,25 @@ function App() {
             <GofrNpTools />
           </ServiceShell></RequireAuth>
         } />
+        <Route path="/gofr-agent" element={
+          <RequireAuth><ServiceShell
+            serviceName="GOFR-Agent"
+            serviceRoute="/gofr-agent"
+            navItems={gofrAgentNavItems}
+          >
+            <GofrAgent />
+          </ServiceShell></RequireAuth>
+        } />
+        <Route path="/gofr-agent/health" element={
+          <RequireAuth><ServiceShell
+            serviceName="GOFR-Agent"
+            serviceRoute="/gofr-agent"
+            navItems={gofrAgentNavItems}
+          >
+            <GofrAgentHealthCheck />
+          </ServiceShell></RequireAuth>
+        } />
+        <Route path="/gofr-agent/capabilities" element={<Navigate to="/gofr-agent/health" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </GlobalErrorBoundary>
