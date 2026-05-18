@@ -3,6 +3,8 @@ export const AGENT_MCP_ENDPOINT = '/api/gofr-agent/mcp';
 export const AGENT_REASONING_LOGGER = 'gofr-agent.reasoning';
 export const AGENT_DEFAULT_MAX_STEPS = 10;
 export const AGENT_HARD_MAX_STEPS = 50;
+export const AGENT_DEFAULT_ASK_TIMEOUT_SECONDS = 650;
+export const AGENT_MIN_ASK_TIMEOUT_SECONDS = 601;
 export const AGENT_QUESTION_MAX_LENGTH = 8000;
 export const AGENT_CONTEXT_MAX_LENGTH = 16000;
 
@@ -320,6 +322,7 @@ export interface AgentTurn {
 
 export interface AgentChatSettings {
   maxSteps: number;
+  askTimeoutSeconds: number;
   outputFormat: AgentOutputFormat;
   toolsOnly: boolean;
   noCommentary: boolean;
@@ -351,4 +354,11 @@ export function clampAgentMaxSteps(value: unknown): number {
     ? Math.floor(value)
     : AGENT_DEFAULT_MAX_STEPS;
   return Math.min(AGENT_HARD_MAX_STEPS, Math.max(1, numeric));
+}
+
+export function clampAgentAskTimeoutSeconds(value: unknown): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value)
+    ? Math.floor(value)
+    : AGENT_DEFAULT_ASK_TIMEOUT_SECONDS;
+  return Math.max(AGENT_MIN_ASK_TIMEOUT_SECONDS, numeric);
 }

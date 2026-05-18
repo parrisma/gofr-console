@@ -3,14 +3,23 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { LoggingMessageNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
 
 import { logger } from '../logging';
-import { AGENT_MCP_ENDPOINT, AGENT_REASONING_LOGGER } from '../../types/gofrAgent';
+import {
+  AGENT_DEFAULT_ASK_TIMEOUT_SECONDS,
+  AGENT_MCP_ENDPOINT,
+  AGENT_REASONING_LOGGER,
+  clampAgentAskTimeoutSeconds,
+} from '../../types/gofrAgent';
 import type { AgentReasoningEvent } from '../../types/gofrAgent';
 import { normalizeReasoningEvent } from './parse';
 
 export type AgentMcpToolResult = Awaited<ReturnType<Client['callTool']>>;
+export type AgentCallToolOptions = Parameters<Client['callTool']>[2];
+
+export const GOFR_AGENT_DEFAULT_ASK_TIMEOUT_MS = AGENT_DEFAULT_ASK_TIMEOUT_SECONDS * 1000;
+const MCP_SDK_DEFAULT_REQUEST_TIMEOUT_SECONDS = 60;
 
 export interface AgentToolCaller {
-  callTool(toolName: string, args?: object): Promise<AgentMcpToolResult>;
+  callTool(toolName: string, args?: object, options?: AgentCallToolOptions): Promise<AgentMcpToolResult>;
 }
 
 export interface GofrAgentClientOptions {
@@ -34,6 +43,32 @@ function normalizeBearerToken(value: string): string {
     token = token.slice(1, -1).trim();
   }
   return token;
+}
+
+export function resolveGofrAgentAskTimeoutSeconds(
+  rawValue: unknown = defaultGofrAgentAskTimeoutSeconds(),
+): number {
+  const numeric = typeof rawValue === 'string' && rawValue.trim()
+    ? Number(rawValue)
+    : typeof rawValue === 'number'
+      ? rawValue
+      : AGENT_DEFAULT_ASK_TIMEOUT_SECONDS;
+  if (!Number.isFinite(numeric) || numeric <= MCP_SDK_DEFAULT_REQUEST_TIMEOUT_SECONDS) {
+    return AGENT_DEFAULT_ASK_TIMEOUT_SECONDS;
+  }
+  return clampAgentAskTimeoutSeconds(numeric);
+}
+
+export function resolveGofrAgentAskTimeoutMs(rawValue?: unknown): number {
+  return resolveGofrAgentAskTimeoutSeconds(rawValue) * 1000;
+}
+
+function defaultGofrAgentAskTimeoutSeconds(): unknown {
+  const seconds = import.meta.env.VITE_GOFR_AGENT_ASK_TIMEOUT_SECONDS;
+  if (typeof seconds === 'string' && seconds.trim()) return seconds;
+  const legacyMs = import.meta.env.VITE_GOFR_AGENT_ASK_TIMEOUT_MS;
+  if (typeof legacyMs === 'string' && legacyMs.trim()) return Number(legacyMs) / 1000;
+  return undefined;
 }
 
 export class GofrAgentClient implements AgentToolCaller {
@@ -106,9 +141,13 @@ export class GofrAgentClient implements AgentToolCaller {
     return client;
   }
 
-  async callTool(toolName: string, args: object = {}): Promise<AgentMcpToolResult> {
+  async callTool(
+    toolName: string,
+    args: object = {},
+    options?: AgentCallToolOptions,
+  ): Promise<AgentMcpToolResult> {
     const client = await this.connect();
-    return client.callTool({ name: toolName, arguments: args as Record<string, unknown> });
+    return client.callTool({ name: toolName, arguments: args as Record<string, unknown> }, undefined, options);
   }
 
   async close(): Promise<void> {

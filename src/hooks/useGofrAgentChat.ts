@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
 import { useTokens } from './useTokens';
-import { GofrAgentClient } from '../services/gofrAgent/client';
+import { GofrAgentClient, resolveGofrAgentAskTimeoutSeconds } from '../services/gofrAgent/client';
 import {
   agentAskWithClient,
   agentHealthCheckWithClient,
@@ -45,9 +45,9 @@ function errorMessage(err: unknown): string {
 function devAgentToken(): JwtToken | null {
   if (!import.meta.env.DEV) return null;
   return {
-    name: 'GOFR-Agent dev admin',
+    name: 'GOFR-Agent Dev Admin',
     groups: 'gofr-agent-dev',
-    token: ['dev', 'admin', 'token'].join('-'),
+    token: 'dev-admin-token',
   };
 }
 
@@ -104,9 +104,17 @@ export function useGofrAgentChat() {
     const token = devAgentToken();
     return token ? [token, ...tokens] : tokens;
   }, [tokens]);
-  const [state, dispatch] = useReducer(agentChatReducer, undefined, () => createInitialAgentChatState());
+  const [state, dispatch] = useReducer(agentChatReducer, undefined, () => {
+    const initial = createInitialAgentChatState();
+    return {
+      ...initial,
+      settings: {
+        ...initial.settings,
+        askTimeoutSeconds: resolveGofrAgentAskTimeoutSeconds(),
+      },
+    };
+  });
   const [selectedTokenIndex, setSelectedTokenIndex] = useState(() => (import.meta.env.DEV ? 0 : -1));
-  const [customAuthToken, setCustomAuthToken] = useState('');
   const [connection, setConnection] = useState<AgentConnectionState>({ status: 'idle' });
   const [httpPing, setHttpPing] = useState<AgentPingResponse | null>(null);
   const [httpHealth, setHttpHealth] = useState<AgentHttpHealthResponse | null>(null);
@@ -117,7 +125,7 @@ export function useGofrAgentChat() {
   const clientRef = useRef<ClientRef | null>(null);
 
   const selectedToken = selectableTokens.find((_, index) => index === selectedTokenIndex);
-  const authToken = customAuthToken.trim() || selectedToken?.token || '';
+  const authToken = selectedToken?.token || '';
   const hasActiveRun = state.pendingTurnId != null;
   const runtimeLimits = useMemo(() => runtimeLimitsFromHealth(mcpHealth), [mcpHealth]);
   const endpointDiagnostic = useMemo(() => agentMcpEndpointDiagnostic(), []);
@@ -255,6 +263,8 @@ export function useGofrAgentChat() {
         output_format: state.settings.outputFormat,
         tools_only: state.settings.toolsOnly,
         no_commentary: state.settings.noCommentary,
+      }, {
+        askTimeoutSeconds: state.settings.askTimeoutSeconds,
       });
       dispatch({
         type: 'complete_run',
@@ -290,8 +300,6 @@ export function useGofrAgentChat() {
     tokens: selectableTokens,
     selectedTokenIndex,
     setSelectedTokenIndex,
-    customAuthToken,
-    setCustomAuthToken,
     state,
     dispatch,
     connection,

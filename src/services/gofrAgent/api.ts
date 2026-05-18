@@ -1,4 +1,5 @@
 import { ApiError, defaultRecoveryHint } from '../api/errors';
+import { logger } from '../logging';
 import {
   AGENT_CONTEXT_MAX_LENGTH,
   AGENT_DEFAULT_MAX_STEPS,
@@ -17,11 +18,16 @@ import {
   type AgentReasoningEvent,
   type AgentResetSessionResponse,
 } from '../../types/gofrAgent';
-import { GofrAgentClient, type AgentToolCaller } from './client';
+import { GofrAgentClient, resolveGofrAgentAskTimeoutMs, type AgentToolCaller } from './client';
 import { normalizeAgentServiceList, parseTextJson } from './parse';
 
 type OneShotCall<T> = (client: GofrAgentClient) => Promise<T>;
 const RELATIVE_URL_BASE = 'http://gofr-console.invalid';
+const MCP_REQUEST_TIMEOUT_CODE = -32001;
+
+interface AgentAskCallOptions {
+  askTimeoutSeconds?: number;
+}
 
 function safeErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
@@ -29,21 +35,50 @@ function safeErrorMessage(err: unknown): string {
 
 function errorStatusCode(err: unknown): number | undefined {
   if (err instanceof ApiError) return err.statusCode;
-  if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'number') return err.code;
+  if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'number') {
+    return err.code >= 100 && err.code <= 599 ? err.code : undefined;
+  }
   const message = safeErrorMessage(err);
   const match = message.match(/(?:HTTP|status|code)\s*(\d{3})/i);
   return match ? Number(match[1]) : undefined;
 }
 
-function toAgentApiError(tool: string, err: unknown): ApiError {
+function errorCode(err: unknown): number | string | undefined {
+  if (err instanceof ApiError) return err.code;
+  if (!err || typeof err !== 'object' || !('code' in err)) return undefined;
+  return typeof err.code === 'number' || typeof err.code === 'string' ? err.code : undefined;
+}
+
+function isMcpRequestTimeout(err: unknown, message: string): boolean {
+  return errorCode(err) === MCP_REQUEST_TIMEOUT_CODE || /request timed out/i.test(message);
+}
+
+function timeoutSeconds(timeoutMs: number): string {
+  const seconds = timeoutMs / 1000;
+  return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
+}
+
+function toAgentApiError(tool: string, err: unknown, timeoutMs?: number): ApiError {
   if (err instanceof ApiError) return err;
   const statusCode = errorStatusCode(err);
   const message = safeErrorMessage(err);
+  const code = errorCode(err);
+  if (timeoutMs && isMcpRequestTimeout(err, message)) {
+    return new ApiError({
+      service: AGENT_SERVICE_NAME,
+      tool,
+      code: code ?? MCP_REQUEST_TIMEOUT_CODE,
+      message: `Client-side MCP request timeout after ${timeoutSeconds(timeoutMs)} seconds while waiting for GOFR-Agent ${tool}`,
+      recovery: 'Increase the UI ask timeout above the GOFR-Agent server timeout, then check GOFR-Agent logs for the server-side outcome.',
+      cause: err,
+    });
+  }
   const isHostProblem = statusCode === 421 || /invalid host|misdirected/i.test(message);
   return new ApiError({
     service: AGENT_SERVICE_NAME,
     tool,
     statusCode,
+    code,
     message,
     recovery: isHostProblem
       ? 'Allow the Vite proxy target host in GOFR-Agent transport security configuration.'
@@ -248,10 +283,33 @@ export function agentListServices(authToken: string): Promise<AgentListServicesR
 export async function agentAskWithClient(
   client: AgentToolCaller,
   request: AgentAskRequest,
+  options: AgentAskCallOptions = {},
 ): Promise<AgentAskResponse> {
+  const prepared = prepareAgentAskRequest(request);
+  const askTimeoutMs = resolveGofrAgentAskTimeoutMs(options.askTimeoutSeconds);
+  const requestId = logger.createRequestId();
+  const startedAt = performance.now();
+  const startedAtIso = new Date().toISOString();
+  logger.info({
+    event: 'agent_ask_started',
+    message: `GOFR-Agent ask started with ${timeoutSeconds(askTimeoutMs)}s client timeout`,
+    request_id: requestId,
+    operation: 'ask',
+    component: 'gofrAgentApi',
+    service_name: AGENT_SERVICE_NAME,
+    tool_name: 'ask',
+    dependency: 'gofr-agent-mcp',
+    data: {
+      timeout_ms: askTimeoutMs,
+      timeout_seconds: askTimeoutMs / 1000,
+      started_at: startedAtIso,
+      question_chars: prepared.question.length,
+      max_steps: prepared.max_steps,
+    },
+  });
+
   try {
-    const prepared = prepareAgentAskRequest(request);
-    const result = await client.callTool('ask', prepared);
+    const result = await client.callTool('ask', prepared, { timeout: askTimeoutMs });
     const response = parseTextJson<AgentAskResponse>(result, 'ask');
     return {
       ...response,
@@ -261,7 +319,30 @@ export async function agentAskWithClient(
       clarification_request: response.clarification_request ?? null,
     };
   } catch (err) {
-    throw toAgentApiError('ask', err);
+    const message = safeErrorMessage(err);
+    const timedOut = isMcpRequestTimeout(err, message);
+    const elapsedMs = Math.round(performance.now() - startedAt);
+    const code = errorCode(err);
+    logger.error({
+      event: timedOut ? 'agent_ask_client_timeout' : 'agent_ask_failed',
+      message: `GOFR-Agent ask failed after ${elapsedMs}ms`,
+      request_id: requestId,
+      operation: 'ask',
+      component: 'gofrAgentApi',
+      service_name: AGENT_SERVICE_NAME,
+      tool_name: 'ask',
+      dependency: 'gofr-agent-mcp',
+      result: timedOut ? 'timeout' : 'failure',
+      duration_ms: elapsedMs,
+      error_code: code == null ? undefined : String(code),
+      data: {
+        timeout_ms: askTimeoutMs,
+        timeout_seconds: askTimeoutMs / 1000,
+        started_at: startedAtIso,
+        cause: message,
+      },
+    });
+    throw toAgentApiError('ask', err, askTimeoutMs);
   }
 }
 

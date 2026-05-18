@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Accordion, AccordionDetails, AccordionSummary, Box, Chip, Stack, Typography } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
@@ -12,12 +13,20 @@ function eventTitle(event: AgentReasoningEvent): string {
 }
 
 export default function AgentRunTrace({ events }: { events: AgentReasoningEvent[] }) {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [events.length]);
+
   if (events.length === 0) {
     return <Typography variant="body2" color="text.secondary">No reasoning events yet.</Typography>;
   }
 
   return (
-    <Box sx={{ maxHeight: 184, overflowY: 'auto', pr: 0.5 }}>
+    <Box ref={scrollContainerRef} sx={{ maxHeight: 184, overflowY: 'auto', pr: 0.5 }}>
       <Stack spacing={1}>
         {events.map((event) => (
           <Accordion key={event.event_id} variant="outlined" disableGutters>

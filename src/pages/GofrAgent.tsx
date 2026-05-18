@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Box, Card, CardContent, Chip, Divider, Grid, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, Divider, Grid, Stack, Typography } from '@mui/material';
 
 import AgentChatThread from '../components/agent/AgentChatThread';
 import AgentComposer from '../components/agent/AgentComposer';
@@ -8,7 +8,7 @@ import AgentRunTrace from '../components/agent/AgentRunTrace';
 import AgentTurnMetadata from '../components/agent/AgentTurnMetadata';
 import TokenSelect from '../components/common/TokenSelect';
 import { useGofrAgentChat } from '../hooks/useGofrAgentChat';
-import type { AgentConnectionState, AgentTurn } from '../types/gofrAgent';
+import type { AgentConnectionState, AgentReasoningEvent, AgentTurn } from '../types/gofrAgent';
 
 function connectionLabel(connection: AgentConnectionState): string {
   if (connection.status === 'connected') return connection.version ? `Connected ${connection.version}` : 'Connected';
@@ -38,6 +38,29 @@ function connectionAlertSeverity(connection: AgentConnectionState): 'info' | 'wa
   return 'warning';
 }
 
+function downstreamAuthError(event: AgentReasoningEvent): { service: string; tool: string; message: string } | null {
+  if (event.kind !== 'tool_result') return null;
+  const summary = event.summary;
+  if (!summary || typeof summary !== 'object') return null;
+  const message = 'message' in summary && typeof summary.message === 'string' ? summary.message : null;
+  if (!message || !/not authorized for activity/i.test(message)) return null;
+  const service = typeof event.service === 'string' ? event.service : 'service';
+  const tool = typeof event.tool === 'string' ? event.tool : 'tool';
+  return { service, tool, message };
+}
+
+function summarizeDownstreamAuthErrors(events: AgentReasoningEvent[]): string | null {
+  const failures = events
+    .map(downstreamAuthError)
+    .filter((item): item is { service: string; tool: string; message: string } => Boolean(item));
+  if (failures.length === 0) return null;
+
+  const uniqueTargets = Array.from(new Set(failures.map((item) => `${item.service}/${item.tool}`)));
+  const preview = uniqueTargets.slice(0, 3).join(', ');
+  const suffix = uniqueTargets.length > 3 ? `, +${uniqueTargets.length - 3} more` : '';
+  return `Current token can reach GOFR-Agent, but downstream MCP activities were rejected for ${preview}${suffix}. Use a token that grants both GoFRAgentAsk and the downstream MCPServer* service activities.`;
+}
+
 export default function GofrAgent() {
   const agent = useGofrAgentChat();
   const [selectedTurnId, setSelectedTurnId] = useState<string | null>(null);
@@ -45,6 +68,7 @@ export default function GofrAgent() {
     ? agent.state.turns.find((turn) => turn.id === selectedTurnId) ?? agent.selectedTurn
     : agent.selectedTurn;
   const canSend = agent.connection.status === 'connected' || agent.connection.status === 'degraded';
+  const downstreamAuthorizationWarning = summarizeDownstreamAuthErrors(selectedTurn?.events ?? []);
 
   return (
     <Box sx={{ display: 'grid', gap: 2 }}>
@@ -64,21 +88,12 @@ export default function GofrAgent() {
           noneLabel="Select token"
           helperText="Bearer token sent to GOFR-Agent"
         />
-        <TextField
-          label="Token override"
-          type="password"
-          size="small"
-          value={agent.customAuthToken}
-          onChange={(event) => agent.setCustomAuthToken(event.target.value)}
-          helperText="Raw token, not saved"
-          autoComplete="off"
-          sx={{ minWidth: 260 }}
-        />
       </Stack>
 
       {'message' in agent.connection && agent.connection.status !== 'connected' ? (
         <Alert severity={connectionAlertSeverity(agent.connection)}>{agent.connection.message}</Alert>
       ) : null}
+      {downstreamAuthorizationWarning ? <Alert severity="warning">{downstreamAuthorizationWarning}</Alert> : null}
       {agent.state.error ? <Alert severity="error">{agent.state.error}</Alert> : null}
 
       <Grid container spacing={2}>

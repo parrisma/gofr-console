@@ -1,5 +1,7 @@
 import {
+  AGENT_DEFAULT_ASK_TIMEOUT_SECONDS,
   AGENT_DEFAULT_MAX_STEPS,
+  clampAgentAskTimeoutSeconds,
   clampAgentMaxSteps,
   type AgentAskResponse,
   type AgentChatSettings,
@@ -19,6 +21,7 @@ export type AgentChatAction =
 
 export const defaultAgentChatSettings: AgentChatSettings = {
   maxSteps: AGENT_DEFAULT_MAX_STEPS,
+  askTimeoutSeconds: AGENT_DEFAULT_ASK_TIMEOUT_SECONDS,
   outputFormat: 'text',
   toolsOnly: false,
   noCommentary: false,
@@ -110,6 +113,7 @@ function sanitizeSettings(settings: AgentChatSettings, patch: Partial<AgentChatS
     ...settings,
     ...patch,
     maxSteps: clampAgentMaxSteps(patch.maxSteps ?? settings.maxSteps),
+    askTimeoutSeconds: clampAgentAskTimeoutSeconds(patch.askTimeoutSeconds ?? settings.askTimeoutSeconds),
     outputFormat: patch.outputFormat ?? settings.outputFormat,
     toolsOnly: patch.toolsOnly ?? settings.toolsOnly,
     noCommentary: patch.noCommentary ?? settings.noCommentary,

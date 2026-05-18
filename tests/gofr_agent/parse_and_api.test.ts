@@ -1,8 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const logging = vi.hoisted(() => ({
+  error: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+}));
+
+vi.mock('../../src/services/logging', () => ({
+  logger: {
+    createRequestId: () => 'test-request-id',
+    error: logging.error,
+    info: logging.info,
+    warn: logging.warn,
+  },
+}));
+
 import { ApiError } from '../../src/services/api/errors';
+import {
+  GOFR_AGENT_DEFAULT_ASK_TIMEOUT_MS,
+  resolveGofrAgentAskTimeoutMs,
+  resolveGofrAgentAskTimeoutSeconds,
+  type AgentMcpToolResult,
+  type AgentToolCaller,
+} from '../../src/services/gofrAgent/client';
 import { normalizeAgentServiceList, parseTextJson } from '../../src/services/gofrAgent/parse';
 import {
+  agentAskWithClient,
   agentHttpBaseUrl,
   agentHttpHealth,
   agentMcpEndpointDiagnostic,
@@ -12,8 +35,25 @@ import {
 } from '../../src/services/gofrAgent/api';
 
 afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
+
+function askToolResult(): AgentMcpToolResult {
+  return {
+    content: [{
+      type: 'text',
+      text: JSON.stringify({
+        session_id: 'session-1',
+        request_id: 'request-1',
+        answer: 'done',
+        steps: [],
+        provenance: [],
+      }),
+    }],
+  } as AgentMcpToolResult;
+}
 
 describe('GOFR-Agent parsing and request preparation', () => {
   it('parses valid MCP text JSON', () => {
@@ -73,6 +113,67 @@ describe('GOFR-Agent parsing and request preparation', () => {
 
   it('rejects empty questions', () => {
     expect(() => prepareAgentAskRequest({ question: '   ' })).toThrow(ApiError);
+  });
+
+  it('resolves ask timeout from UI env seconds with a default above the SDK 60s timeout', () => {
+    expect(resolveGofrAgentAskTimeoutMs()).toBe(GOFR_AGENT_DEFAULT_ASK_TIMEOUT_MS);
+
+    vi.stubEnv('VITE_GOFR_AGENT_ASK_TIMEOUT_SECONDS', '700');
+
+    expect(resolveGofrAgentAskTimeoutSeconds()).toBe(700);
+    expect(resolveGofrAgentAskTimeoutMs()).toBe(700000);
+    expect(resolveGofrAgentAskTimeoutSeconds('60')).toBe(GOFR_AGENT_DEFAULT_ASK_TIMEOUT_MS / 1000);
+    expect(resolveGofrAgentAskTimeoutSeconds('300')).toBe(601);
+    expect(GOFR_AGENT_DEFAULT_ASK_TIMEOUT_MS).toBeGreaterThan(60_000);
+  });
+
+  it('passes the configured ask timeout as an MCP SDK per-call option', async () => {
+    let observedOptions: Parameters<AgentToolCaller['callTool']>[2] | undefined;
+    const client: AgentToolCaller = {
+      async callTool(toolName, _args, options) {
+        expect(toolName).toBe('ask');
+        observedOptions = options;
+        return askToolResult();
+      },
+    };
+
+    await expect(agentAskWithClient(client, { question: 'hello' }, { askTimeoutSeconds: 700 })).resolves.toMatchObject({ answer: 'done' });
+
+    expect(observedOptions?.timeout).toBe(700000);
+    expect(observedOptions?.timeout).toBeGreaterThan(60_000);
+    expect(logging.info).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'agent_ask_started',
+      data: expect.objectContaining({ timeout_ms: 700000 }),
+    }));
+  });
+
+  it('maps MCP SDK ask timeouts as client-side timeouts, not fake HTTP statuses', async () => {
+    const timeoutError = Object.assign(new Error('Request timed out'), { code: -32001 });
+    const client: AgentToolCaller = {
+      async callTool() {
+        throw timeoutError;
+      },
+    };
+
+    try {
+      await agentAskWithClient(client, { question: 'hello' });
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      const apiErr = err as ApiError;
+      expect(apiErr.statusCode).toBeUndefined();
+      expect(apiErr.code).toBe(-32001);
+      expect(apiErr.message).toContain('Client-side MCP request timeout after 650 seconds');
+      expect(apiErr.message).not.toContain('HTTP -32001');
+      expect(apiErr.recovery).toContain('UI ask timeout');
+    }
+
+    expect(logging.error).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'agent_ask_client_timeout',
+      result: 'timeout',
+      error_code: '-32001',
+      data: expect.objectContaining({ timeout_ms: GOFR_AGENT_DEFAULT_ASK_TIMEOUT_MS, timeout_seconds: 650 }),
+    }));
   });
 
   it('derives HTTP health base URLs from MCP URLs', () => {

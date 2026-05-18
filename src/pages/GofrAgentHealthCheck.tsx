@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Grid, Stack, Typography } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 
 import AgentCapabilitiesPanel from '../components/agent/AgentCapabilitiesPanel';
@@ -68,16 +68,6 @@ export default function GofrAgentHealthCheck() {
           onChange={agent.setSelectedTokenIndex}
           noneLabel="Select token"
           helperText="Bearer token sent to GOFR-Agent"
-        />
-        <TextField
-          label="Token override"
-          type="password"
-          size="small"
-          value={agent.customAuthToken}
-          onChange={(event) => agent.setCustomAuthToken(event.target.value)}
-          helperText="Raw token, not saved"
-          autoComplete="off"
-          sx={{ minWidth: 260 }}
         />
         <Button
           variant="outlined"
