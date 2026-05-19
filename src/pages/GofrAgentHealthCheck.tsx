@@ -66,6 +66,7 @@ export default function GofrAgentHealthCheck() {
           tokens={agent.tokens}
           value={agent.selectedTokenIndex}
           onChange={agent.setSelectedTokenIndex}
+          disabled={agent.hasActiveRun}
           noneLabel="Select token"
           helperText="Bearer token sent to GOFR-Agent"
         />

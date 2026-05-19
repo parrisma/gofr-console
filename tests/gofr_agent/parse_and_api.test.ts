@@ -176,6 +176,35 @@ describe('GOFR-Agent parsing and request preparation', () => {
     }));
   });
 
+  it('maps MCP SDK connection closures as transport closures before timeout', async () => {
+    const connectionClosedError = Object.assign(new Error('Connection closed'), { code: -32000 });
+    const client: AgentToolCaller = {
+      async callTool() {
+        throw connectionClosedError;
+      },
+    };
+
+    try {
+      await agentAskWithClient(client, { question: 'hello' }, { askTimeoutSeconds: 700 });
+      throw new Error('expected throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError);
+      const apiErr = err as ApiError;
+      expect(apiErr.statusCode).toBeUndefined();
+      expect(apiErr.code).toBe(-32000);
+      expect(apiErr.message).toContain('MCP transport connection closed before the configured 700 second UI ask timeout completed');
+      expect(apiErr.message).not.toContain('Client-side MCP request timeout');
+      expect(apiErr.recovery).toContain('token unchanged');
+    }
+
+    expect(logging.error).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'agent_ask_connection_closed',
+      result: 'failure',
+      error_code: '-32000',
+      data: expect.objectContaining({ timeout_ms: 700000, timeout_seconds: 700 }),
+    }));
+  });
+
   it('derives HTTP health base URLs from MCP URLs', () => {
     expect(agentHttpBaseUrl('/api/gofr-agent/mcp')).toBe('/api/gofr-agent');
     expect(agentHttpBaseUrl('/api/gofr-agent/mcp/')).toBe('/api/gofr-agent');

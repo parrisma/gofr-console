@@ -85,6 +85,7 @@ export default function GofrAgent() {
           tokens={agent.tokens}
           value={agent.selectedTokenIndex}
           onChange={agent.setSelectedTokenIndex}
+          disabled={agent.hasActiveRun}
           noneLabel="Select token"
           helperText="Bearer token sent to GOFR-Agent"
         />

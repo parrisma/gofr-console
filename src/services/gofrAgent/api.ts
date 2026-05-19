@@ -23,6 +23,7 @@ import { normalizeAgentServiceList, parseTextJson } from './parse';
 
 type OneShotCall<T> = (client: GofrAgentClient) => Promise<T>;
 const RELATIVE_URL_BASE = 'http://gofr-console.invalid';
+const MCP_CONNECTION_CLOSED_CODE = -32000;
 const MCP_REQUEST_TIMEOUT_CODE = -32001;
 
 interface AgentAskCallOptions {
@@ -53,6 +54,10 @@ function isMcpRequestTimeout(err: unknown, message: string): boolean {
   return errorCode(err) === MCP_REQUEST_TIMEOUT_CODE || /request timed out/i.test(message);
 }
 
+function isMcpConnectionClosed(err: unknown, message: string): boolean {
+  return errorCode(err) === MCP_CONNECTION_CLOSED_CODE || /connection closed/i.test(message);
+}
+
 function timeoutSeconds(timeoutMs: number): string {
   const seconds = timeoutMs / 1000;
   return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
@@ -70,6 +75,16 @@ function toAgentApiError(tool: string, err: unknown, timeoutMs?: number): ApiErr
       code: code ?? MCP_REQUEST_TIMEOUT_CODE,
       message: `Client-side MCP request timeout after ${timeoutSeconds(timeoutMs)} seconds while waiting for GOFR-Agent ${tool}`,
       recovery: 'Increase the UI ask timeout above the GOFR-Agent server timeout, then check GOFR-Agent logs for the server-side outcome.',
+      cause: err,
+    });
+  }
+  if (timeoutMs && isMcpConnectionClosed(err, message)) {
+    return new ApiError({
+      service: AGENT_SERVICE_NAME,
+      tool,
+      code: code ?? MCP_CONNECTION_CLOSED_CODE,
+      message: `MCP transport connection closed before the configured ${timeoutSeconds(timeoutMs)} second UI ask timeout completed`,
+      recovery: 'Keep the GOFR-Agent page open and token unchanged while the ask runs. If this happens without UI navigation or reload, check GOFR-Agent, Vite proxy, and network logs for an upstream connection close.',
       cause: err,
     });
   }
@@ -321,10 +336,11 @@ export async function agentAskWithClient(
   } catch (err) {
     const message = safeErrorMessage(err);
     const timedOut = isMcpRequestTimeout(err, message);
+    const connectionClosed = isMcpConnectionClosed(err, message);
     const elapsedMs = Math.round(performance.now() - startedAt);
     const code = errorCode(err);
     logger.error({
-      event: timedOut ? 'agent_ask_client_timeout' : 'agent_ask_failed',
+      event: timedOut ? 'agent_ask_client_timeout' : connectionClosed ? 'agent_ask_connection_closed' : 'agent_ask_failed',
       message: `GOFR-Agent ask failed after ${elapsedMs}ms`,
       request_id: requestId,
       operation: 'ask',
